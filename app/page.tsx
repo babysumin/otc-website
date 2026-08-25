@@ -98,12 +98,6 @@ export default function Home() {
     await supabase.from('members').update({ is_officer: updated.is_officer }).eq('id', m.id)
   }
 
-  async function setGender(m: Member, gender: 'M' | 'F' | '') {
-    const next = gender === '' ? null : gender
-    setMembers(prev => prev.map(x => (x.id === m.id ? { ...x, gender: next } : x)))
-    await supabase.from('members').update({ gender: next }).eq('id', m.id)
-  }
-
   function openAdd() {
     setEditing(null)
     setForm({ name: '', phone: '', join_date: '', memo: '', status: 'member', gender: '' })
@@ -279,21 +273,7 @@ export default function Home() {
                   {m.name}
                   {m.is_officer && <span className="officer-badge">운영진</span>}
                 </td>
-                <td>
-                  {isAdmin ? (
-                    <select
-                      className="gender-select"
-                      value={m.gender || ''}
-                      onChange={e => setGender(m, e.target.value as 'M' | 'F' | '')}
-                    >
-                      <option value="">-</option>
-                      <option value="M">남</option>
-                      <option value="F">여</option>
-                    </select>
-                  ) : (
-                    <GenderIcon gender={m.gender} />
-                  )}
-                </td>
+                <td><GenderIcon gender={m.gender} /></td>
                 <td>
                   {isAdmin ? (
                     <select

@@ -15,7 +15,9 @@ type LedgerRow = {
   sep: number | null; oct: number | null; nov: number | null; dec: number | null
 }
 
-type MemberInfo = { status: MemberStatus; gender: 'M' | 'F' | null }
+type MemberInfo = { id: string; status: MemberStatus; gender: 'M' | 'F' | null }
+
+const STATUS_ORDER: Record<string, number> = { member: 0, guest: 1, alumni: 2 }
 
 const MONTHS: Array<{ key: keyof LedgerRow; label: string }> = [
   { key: 'jan', label: '1월' }, { key: 'feb', label: '2월' }, { key: 'mar', label: '3월' },
@@ -45,12 +47,20 @@ export default function MembershipLedgerPage() {
   }
 
   async function fetchMemberInfo() {
-    const { data } = await supabase.from('members').select('name, status, gender')
+    const { data } = await supabase.from('members').select('id, name, status, gender')
     if (data) {
       const map: Record<string, MemberInfo> = {}
-      data.forEach((m: any) => { map[m.name] = { status: m.status, gender: m.gender } })
+      data.forEach((m: any) => { map[m.name] = { id: m.id, status: m.status, gender: m.gender } })
       setMemberMap(map)
     }
+  }
+
+  async function setGender(memberName: string, gender: 'M' | 'F' | '') {
+    const info = memberMap[memberName]
+    if (!info) return
+    const next = gender === '' ? null : gender
+    setMemberMap(prev => ({ ...prev, [memberName]: { ...prev[memberName], gender: next } }))
+    await supabase.from('members').update({ gender: next }).eq('id', info.id)
   }
 
   async function updateCell(row: LedgerRow, monthKey: keyof LedgerRow, value: string) {
@@ -65,11 +75,17 @@ export default function MembershipLedgerPage() {
 
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase()
-    return rows.filter(r => {
-      const matchesSearch = !s || r.member_name.toLowerCase().includes(s)
-      const matchesStatus = statusFilter === 'all' || effectiveStatus(r) === statusFilter
-      return matchesSearch && matchesStatus
-    })
+    return rows
+      .filter(r => {
+        const matchesSearch = !s || r.member_name.toLowerCase().includes(s)
+        const matchesStatus = statusFilter === 'all' || effectiveStatus(r) === statusFilter
+        return matchesSearch && matchesStatus
+      })
+      .sort((a, b) => {
+        const statusDiff = STATUS_ORDER[effectiveStatus(a)] - STATUS_ORDER[effectiveStatus(b)]
+        if (statusDiff !== 0) return statusDiff
+        return a.member_name.localeCompare(b.member_name, 'ko')
+      })
   }, [rows, search, statusFilter, memberMap])
 
   function rowTotal(r: LedgerRow) {
@@ -119,7 +135,21 @@ export default function MembershipLedgerPage() {
               return (
                 <tr key={r.id}>
                   <td className="name-cell">{r.member_name}</td>
-                  <td><GenderIcon gender={info?.gender || null} /></td>
+                  <td>
+                    {isAdmin ? (
+                      <select
+                        className="gender-select"
+                        value={info?.gender || ''}
+                        onChange={e => setGender(r.member_name, e.target.value as 'M' | 'F' | '')}
+                      >
+                        <option value="">-</option>
+                        <option value="M">남</option>
+                        <option value="F">여</option>
+                      </select>
+                    ) : (
+                      <GenderIcon gender={info?.gender || null} />
+                    )}
+                  </td>
                   <td><span className={`status-badge status-${status}`}>{STATUS_LABEL[status]}</span></td>
                   {MONTHS.map(m => (
                     <td key={m.key}>
