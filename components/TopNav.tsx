@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { href: '/games', label: '경기' },
   { href: '/policy', label: '모임 Policy' },
   { href: '/etiquette', label: '테니스 에티켓' },
+  { href: '/suggestions', label: '익명 마음의 소리' },
   { href: '/assistant', label: 'AI 도우미' },
 ]
 
