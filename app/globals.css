@@ -46,9 +46,10 @@ body{
 .brand p{margin:0;font-size:13px;color:var(--text-sub);}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px;}
 .tabs{display:flex;gap:6px;margin-bottom:24px;border-bottom:1px solid var(--line);padding-bottom:0;}
-.tab{height:38px;padding:0 4px;margin-bottom:-1px;border:none;border-bottom:3px solid transparent;background:transparent;font-size:14px;font-weight:600;cursor:pointer;color:var(--text-sub);display:flex;align-items:center;text-decoration:none;transition:color .15s;}
+.tab{height:38px;padding:0 4px;margin-bottom:-1px;border:none;border-bottom:3px solid transparent;background:transparent;font-size:14px;font-weight:600;cursor:pointer;color:var(--text-sub);display:flex;align-items:center;gap:5px;text-decoration:none;transition:color .15s,font-size .15s;}
 .tab:hover{color:var(--navy);}
-.tab.active{color:var(--navy);border-bottom-color:var(--accent);}
+.tab.active{color:var(--navy);border-bottom-color:var(--accent);font-size:15.5px;font-weight:700;}
+.tennis-ball-icon{flex-shrink:0;}
 .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;}
 .section-title{font-size:16px;font-weight:700;margin:0;}
 .subtabs{display:flex;gap:6px;margin-bottom:16px;}
