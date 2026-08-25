@@ -57,6 +57,50 @@ function pairKey(a: string, b: string) {
   return [a, b].sort().join('::')
 }
 
+// 3번: 스킬(분기 승점) 기반 밸런스 매칭. 강한 사람+약한 사람을 파트너로 묶어 팀 합산 실력을 비슷하게 맞춤.
+function balancedRoundAttempt(
+  players: string[],
+  skillMap: Record<string, number>,
+  usedPairs: Set<string>,
+  attempts = 300
+): [string, string][] | null {
+  const JITTER = 40
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const jittered = players.map(p => ({ p, score: (skillMap[p] || 0) + (Math.random() - 0.5) * JITTER }))
+    jittered.sort((a, b) => b.score - a.score)
+    const sorted = jittered.map(x => x.p)
+    // 스네이크 방식: 1등+꼴찌, 2등+뒤에서2등... 이렇게 짝지어서 페어별 합산 실력을 평준화
+    const ordered: string[] = []
+    let lo = 0, hi = sorted.length - 1
+    while (lo <= hi) {
+      ordered.push(sorted[lo]); lo++
+      if (lo <= hi) { ordered.push(sorted[hi]); hi-- }
+    }
+    const pairs: [string, string][] = []
+    const localUsed = new Set(usedPairs)
+    let ok = true
+    for (let i = 0; i < ordered.length; i += 2) {
+      const a = ordered[i], b = ordered[i + 1]
+      const key = pairKey(a, b)
+      if (localUsed.has(key)) { ok = false; break }
+      localUsed.add(key)
+      pairs.push([a, b])
+    }
+    if (ok) return pairs
+  }
+  return null
+}
+
+// 페어들을 합산 실력이 비슷한 것끼리 묶어서 매치(팀 vs 팀)로 구성
+function groupPairsIntoBalancedMatches(pairs: [string, string][], skillMap: Record<string, number>): [string, string][] {
+  const withScore = pairs.map(pair => ({
+    pair,
+    score: (skillMap[pair[0]] || 0) + (skillMap[pair[1]] || 0),
+  }))
+  withScore.sort((a, b) => b.score - a.score)
+  return withScore.map(x => x.pair)
+}
+
 function tryMatchRound(players: string[], usedPairs: Set<string>, attempts = 300): [string, string][] | null {
   for (let attempt = 0; attempt < attempts; attempt++) {
     const shuffled = shuffle(players)
@@ -76,29 +120,37 @@ function tryMatchRound(players: string[], usedPairs: Set<string>, attempts = 300
 }
 
 // 2번: 성별 우선순위를 반영한 매칭. 여성이 4의 배수면 여복 우선, 2명 이상이면 혼복 우선. 안 되면 그냥 일반 매칭.
-function genderAwareRound(playing: string[], genderMap: Record<string, 'M' | 'F' | null>, usedPairs: Set<string>): [string, string][] | null {
+// 3번: 파트너 배정은 항상 스킬(분기 승점) 밸런스를 우선 적용.
+function genderAwareRound(
+  playing: string[],
+  genderMap: Record<string, 'M' | 'F' | null>,
+  skillMap: Record<string, number>,
+  usedPairs: Set<string>
+): [string, string][] | null {
   const females = playing.filter(p => genderMap[p] === 'F')
   const others = playing.filter(p => genderMap[p] !== 'F')
 
   if (females.length > 0 && females.length % 4 === 0) {
-    const femaleRound = tryMatchRound(females, usedPairs)
-    const otherRound = others.length > 0 ? tryMatchRound(others, usedPairs) : []
+    const femaleRound = balancedRoundAttempt(females, skillMap, usedPairs)
+    const otherRound = others.length > 0 ? balancedRoundAttempt(others, skillMap, usedPairs) : []
     if (femaleRound && otherRound) return [...femaleRound, ...otherRound]
   }
 
   if (females.length >= 2 && others.length >= 2) {
     for (let attempt = 0; attempt < 100; attempt++) {
-      const shuffledFemales = shuffle(females)
-      const shuffledOthers = shuffle(others)
+      const JITTER = 40
+      const sortedFemales = [...females].sort((a, b) => ((skillMap[b] || 0) + (Math.random() - 0.5) * JITTER) - ((skillMap[a] || 0) + (Math.random() - 0.5) * JITTER))
+      const sortedOthers = [...others].sort((a, b) => ((skillMap[b] || 0) + (Math.random() - 0.5) * JITTER) - ((skillMap[a] || 0) + (Math.random() - 0.5) * JITTER))
       const pairs: [string, string][] = []
       const localUsed = new Set(usedPairs)
-      const femalesLeft = [...shuffledFemales]
-      const othersLeft = [...shuffledOthers]
+      const femalesLeft = [...sortedFemales]
+      // 강한 여성 + 약한 상대(others 뒤쪽)로 짝지어 밸런스 맞추기
+      const othersLeft = [...sortedOthers].reverse()
       let ok = true
 
       while (femalesLeft.length > 0 && othersLeft.length > 0) {
-        const f = femalesLeft.pop() as string
-        const m = othersLeft.pop() as string
+        const f = femalesLeft.shift() as string
+        const m = othersLeft.shift() as string
         const key = pairKey(f, m)
         if (localUsed.has(key)) { ok = false; break }
         localUsed.add(key)
@@ -119,14 +171,15 @@ function genderAwareRound(playing: string[], genderMap: Record<string, 'M' | 'F'
     }
   }
 
-  // 성별 우선 매칭이 불가능하면 그냥 일반 매칭으로 진행
-  return tryMatchRound(playing, usedPairs)
+  // 성별 우선 매칭이 불가능하면 스킬 밸런스 기반 일반 매칭으로 진행
+  return balancedRoundAttempt(playing, skillMap, usedPairs)
 }
 
 function generateRoundsFlexible(
   players: string[],
   desiredGames: number,
-  genderMap: Record<string, 'M' | 'F' | null>
+  genderMap: Record<string, 'M' | 'F' | null>,
+  skillMap: Record<string, number>
 ): { rounds: [string, string][][]; gamesPlayed: Record<string, number> } {
   const usedPairs = new Set<string>()
   const gamesPlayed: Record<string, number> = {}
@@ -143,7 +196,7 @@ function generateRoundsFlexible(
       byePlayers = sorted.slice(0, byeCount)
     }
     const playing = players.filter(p => !byePlayers.includes(p))
-    const round = genderAwareRound(playing, genderMap, usedPairs)
+    const round = genderAwareRound(playing, genderMap, skillMap, usedPairs)
     if (!round) {
       stagnant++
       if (stagnant > 30) break
@@ -222,6 +275,23 @@ function quarterLabel(dateStr: string): string {
   return `${yy}Q${q}`
 }
 
+// 이번 분기 경기 결과만 골라서 승점 기반 스킬 점수 계산. 기록 없는 선수는 평균값으로 처리.
+function computeQuarterSkillMap(sessions: SessionRow[], allMatches: MatchRow[], selectedPlayers: string[]): Record<string, number> {
+  const now = new Date()
+  const yy = String(now.getFullYear()).slice(2)
+  const currentQ = `${yy}Q${Math.floor(now.getMonth() / 3) + 1}`
+  const quarterSessionIds = new Set(sessions.filter(s => quarterLabel(s.session_date) === currentQ).map(s => s.id))
+  const quarterMatches = allMatches.filter(m => m.session_id && quarterSessionIds.has(m.session_id))
+  const stats = computeStats(quarterMatches)
+  const skillMap: Record<string, number> = {}
+  stats.forEach(s => { skillMap[s.name] = s.points })
+
+  const knownScores = selectedPlayers.map(p => skillMap[p]).filter((v): v is number => v != null)
+  const avg = knownScores.length > 0 ? knownScores.reduce((a, b) => a + b, 0) / knownScores.length : 0
+  selectedPlayers.forEach(p => { if (skillMap[p] == null) skillMap[p] = avg })
+  return skillMap
+}
+
 function GamesPageInner() {
   const { isAdmin } = useAuth()
   const searchParams = useSearchParams()
@@ -238,7 +308,7 @@ function GamesPageInner() {
   const [sessionTitle, setSessionTitle] = useState('')
   const [titleTouched, setTitleTouched] = useState(false)
   const [confirmMsg, setConfirmMsg] = useState<string | null>(null)
-  const [pendingGeneration, setPendingGeneration] = useState<{ rounds: [string, string][][]; actualGames: number } | null>(null)
+  const [pendingGeneration, setPendingGeneration] = useState<{ rounds: [string, string][][]; actualGames: number; skillMap: Record<string, number> } | null>(null)
 
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [sessionTab, setSessionTab] = useState<'info' | 'results' | 'ranking'>('results')
@@ -290,21 +360,22 @@ function GamesPageInner() {
     }
     const genderMap: Record<string, 'M' | 'F' | null> = {}
     members.forEach(m => { genderMap[m.name] = m.gender })
+    const skillMap = computeQuarterSkillMap(sessions, allMatches, players)
 
     const desired = Number(gamesPerPlayer) || 1
-    const { rounds, gamesPlayed } = generateRoundsFlexible(players, desired, genderMap)
+    const { rounds, gamesPlayed } = generateRoundsFlexible(players, desired, genderMap, skillMap)
     const minGames = Math.min(...Object.values(gamesPlayed))
 
     if (minGames < desired) {
       const byeNote = players.length % 4 !== 0 ? ' (인원이 4명 단위가 아니라 라운드마다 일부는 돌아가며 쉬어요)' : ''
       setConfirmMsg(`선택하신 인원으로는 1인당 ${desired}경기를 정확히 만들기 어려워요. 최소 ${minGames}경기씩은 보장돼요${byeNote}. 이대로 진행할까요?`)
-      setPendingGeneration({ rounds, actualGames: minGames })
+      setPendingGeneration({ rounds, actualGames: minGames, skillMap })
     } else {
-      createSession(rounds, desired)
+      createSession(rounds, desired, skillMap)
     }
   }
 
-  async function createSession(rounds: [string, string][][], actualGames: number) {
+  async function createSession(rounds: [string, string][][], actualGames: number, skillMap: Record<string, number>) {
     const today = new Date()
     const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
     const title = sessionTitle.trim() || `${dateStr} 대회 ${groupLabel}`
@@ -319,13 +390,13 @@ function GamesPageInner() {
 
     const matchRows: any[] = []
     rounds.forEach((round, roundIdx) => {
-      const shuffledPairs = shuffle(round)
-      for (let i = 0; i + 1 < shuffledPairs.length; i += 2) {
+      const balancedPairs = groupPairsIntoBalancedMatches(round, skillMap)
+      for (let i = 0; i + 1 < balancedPairs.length; i += 2) {
         matchRows.push({
           session_id: session.id,
           round_no: roundIdx + 1,
-          team1: shuffledPairs[i],
-          team2: shuffledPairs[i + 1],
+          team1: balancedPairs[i],
+          team2: balancedPairs[i + 1],
           score1: null,
           score2: null,
         })
@@ -426,6 +497,7 @@ function GamesPageInner() {
           <li>라운드가 진행될수록 같은 파트너와 다시 짝이 되지 않도록 자동으로 조정돼요.</li>
           <li>여성 인원이 4명 단위면 여자 복식을 우선 구성하고, 2명 이상이면 혼합 복식이 되도록 우선 배정해요 (파트너 중복을 피할 수 없으면 일반 매칭으로 진행돼요).</li>
           <li>참가 인원이 4명 단위가 아니면, 매 라운드마다 그때까지 가장 많이 뛴 사람이 우선 한 라운드 쉬어요.</li>
+          <li>이번 분기 승점을 기준으로, 강한 선수와 약한 선수를 파트너로 묶고 양 팀 실력 합이 비슷하도록 자동 배정해요 (기록 없는 선수는 평균값으로 처리해요).</li>
         </ul>
       </div>
 
@@ -482,7 +554,7 @@ function GamesPageInner() {
                 <p style={{ fontSize: 14, lineHeight: 1.6 }}>{confirmMsg}</p>
                 <div className="modal-actions">
                   <button className="btn" onClick={() => { setConfirmMsg(null); setPendingGeneration(null) }}>취소</button>
-                  <button className="btn primary" onClick={() => createSession(pendingGeneration.rounds, pendingGeneration.actualGames)}>진행합니다</button>
+                  <button className="btn primary" onClick={() => createSession(pendingGeneration.rounds, pendingGeneration.actualGames, pendingGeneration.skillMap)}>진행합니다</button>
                 </div>
               </div>
             </div>
