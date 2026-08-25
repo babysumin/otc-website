@@ -16,6 +16,12 @@ const STATUS_TABS: Array<{ key: 'all' | MemberStatus; label: string }> = [
 ]
 const STATUS_ORDER: Record<MemberStatus, number> = { member: 0, guest: 1, alumni: 2 }
 
+function parseJoinQuarter(joinDate: string | null): number | null {
+  if (!joinDate) return null
+  const match = joinDate.match(/Q([1-4])/)
+  return match ? Number(match[1]) : null
+}
+
 export default function Home() {
   const { isAdmin } = useAuth()
   const [members, setMembers] = useState<Member[]>([])
@@ -74,16 +80,8 @@ export default function Home() {
     setLoading(false)
   }
 
-  function parseJoinQuarter(joinDate: string | null): number | null {
-    if (!joinDate) return null
-    const match = joinDate.match(/Q([1-4])/)
-    return match ? Number(match[1]) : null
-  }
-
-  async function cycleFee(m: Member, q: typeof QUARTERS[number]) {
-    const order: Array<Member[typeof q]> = [null, 'unpaid', 'paid']
-    const currentIdx = order.indexOf(m[q])
-    const next = order[(currentIdx + 1) % order.length]
+  async function setFee(m: Member, q: typeof QUARTERS[number], value: 'paid' | 'unpaid' | '') {
+    const next = value === '' ? null : value
     setMembers(prev => prev.map(x => (x.id === m.id ? { ...x, [q]: next } : x)))
     await supabase.from('members').update({ [q]: next }).eq('id', m.id)
   }
@@ -295,16 +293,25 @@ export default function Home() {
                   const isPreJoin = m.status === 'member' && joinQ !== null && (idx + 1) < joinQ
                   const isApplicable = m.status === 'member' && !isPreJoin
                   const value = m[q]
-                  const label = !isApplicable ? '-' : value === 'paid' ? '완납' : value === 'unpaid' ? '미납' : '-'
-                  const cls = value === 'paid' ? 'paid' : value === 'unpaid' ? 'unpaid' : 'empty'
+                  if (!isApplicable) {
+                    return <td key={q}><span className="qpill empty readonly">-</span></td>
+                  }
+                  if (!isAdmin) {
+                    const label = value === 'paid' ? '완납' : value === 'unpaid' ? '미납' : '-'
+                    const cls = value === 'paid' ? 'paid' : value === 'unpaid' ? 'unpaid' : 'empty'
+                    return <td key={q}><span className={`qpill ${cls} readonly`}>{label}</span></td>
+                  }
                   return (
                     <td key={q}>
-                      <span
-                        className={`qpill ${cls} ${isAdmin && isApplicable ? '' : 'readonly'}`}
-                        onClick={() => { if (isAdmin && isApplicable) cycleFee(m, q) }}
+                      <select
+                        className={`fee-select fee-${value || 'empty'}`}
+                        value={value || ''}
+                        onChange={e => setFee(m, q, e.target.value as 'paid' | 'unpaid' | '')}
                       >
-                        {label}
-                      </span>
+                        <option value="">-</option>
+                        <option value="unpaid">미납</option>
+                        <option value="paid">완납</option>
+                      </select>
                     </td>
                   )
                 })}

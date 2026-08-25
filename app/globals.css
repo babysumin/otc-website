@@ -95,6 +95,10 @@ tbody tr:last-child td{border-bottom:none;}
 .qpill.paid{background:var(--ok-bg);color:var(--ok);border-color:#cfe6da;}
 .qpill.unpaid{background:var(--danger-bg);color:var(--danger);border-color:#f2d3c8;}
 .qpill.empty{background:#f1f1f1;color:var(--text-faint);border-color:transparent;}
+.fee-select{height:26px;border-radius:6px;border:1px solid transparent;font-size:12px;font-weight:700;padding:0 4px;cursor:pointer;text-align:center;}
+.fee-select.fee-paid{background:var(--ok-bg);color:var(--ok);}
+.fee-select.fee-unpaid{background:var(--danger-bg);color:var(--danger);}
+.fee-select.fee-empty{background:#f1f1f1;color:var(--text-faint);}
 .password-gate{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:32px;text-align:center;max-width:360px;margin:40px auto;}
 .password-gate p{margin:0 0 14px;font-size:14px;color:var(--text-sub);}
 .password-gate-row{display:flex;gap:8px;}

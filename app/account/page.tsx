@@ -68,6 +68,19 @@ export default function AccountPage() {
     setModalOpen(true)
   }
 
+  async function autoMarkFeePaid(payload: { person: string | null; contents: string; income: number | null }) {
+    if (!payload.person || !payload.income || payload.income < 30) return
+    const qMatch = payload.contents.match(/Q([1-4])/i)
+    const looksLikeFee = /membership|회비/i.test(payload.contents)
+    if (!qMatch || !looksLikeFee) return
+    const q = `q${qMatch[1]}_paid`
+    await supabase
+      .from('members')
+      .update({ [q]: 'paid' })
+      .eq('name', payload.person)
+      .eq('status', 'member')
+  }
+
   async function saveTxn() {
     if (!form.contents.trim()) {
       setContentsErr(true)
@@ -86,7 +99,10 @@ export default function AccountPage() {
       if (!error) fetchTxns()
     } else {
       const { error } = await supabase.from('transactions').insert(payload)
-      if (!error) fetchTxns()
+      if (!error) {
+        fetchTxns()
+        await autoMarkFeePaid(payload)
+      }
     }
     setModalOpen(false)
   }
