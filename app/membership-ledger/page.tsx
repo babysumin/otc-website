@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { supabase, MemberStatus, STATUS_LABEL } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 import TopNav from '@/components/TopNav'
@@ -10,6 +11,8 @@ type LedgerRow = {
   id: string
   member_name: string
   status: string
+  invitor: string | null
+  attendance_count: number | null
   jan: number | null; feb: number | null; mar: number | null; apr: number | null
   may: number | null; jun: number | null; jul: number | null; aug: number | null
   sep: number | null; oct: number | null; nov: number | null; dec: number | null
@@ -28,6 +31,7 @@ const MONTHS: Array<{ key: keyof LedgerRow; label: string }> = [
 
 export default function MembershipLedgerPage() {
   const { isAdmin } = useAuth()
+  const searchParams = useSearchParams()
   const [unlocked, setUnlocked] = useState(false)
   const [pwInput, setPwInput] = useState('')
   const [pwErr, setPwErr] = useState(false)
@@ -41,6 +45,8 @@ export default function MembershipLedgerPage() {
     if (typeof window !== 'undefined' && sessionStorage.getItem('otc_account_unlocked') === '1') {
       setUnlocked(true)
     }
+    const q = searchParams.get('q')
+    if (q) setSearch(q)
   }, [])
 
   function checkPassword() {
@@ -95,6 +101,17 @@ export default function MembershipLedgerPage() {
     const num = value === '' ? null : Number(value)
     setRows(prev => prev.map(r => (r.id === row.id ? { ...r, [monthKey]: num } : r)))
     await supabase.from('membership_ledger').update({ [monthKey]: num }).eq('id', row.id)
+  }
+
+  async function updateInvitor(row: LedgerRow, value: string) {
+    setRows(prev => prev.map(r => (r.id === row.id ? { ...r, invitor: value } : r)))
+    await supabase.from('membership_ledger').update({ invitor: value || null }).eq('id', row.id)
+  }
+
+  async function updateAttendance(row: LedgerRow, value: string) {
+    const num = value === '' ? 0 : Number(value)
+    setRows(prev => prev.map(r => (r.id === row.id ? { ...r, attendance_count: num } : r)))
+    await supabase.from('membership_ledger').update({ attendance_count: num }).eq('id', row.id)
   }
 
   function effectiveStatus(r: LedgerRow): MemberStatus {
@@ -177,6 +194,7 @@ export default function MembershipLedgerPage() {
           <thead>
             <tr>
               <th rowSpan={2}>이름</th><th rowSpan={2}>성별</th><th rowSpan={2}>상태</th>
+              <th rowSpan={2}>초대자</th><th rowSpan={2}>참석횟수</th>
               <th colSpan={3} className="quarter-head">1분기</th>
               <th colSpan={3} className="quarter-head">2분기</th>
               <th colSpan={3} className="quarter-head">3분기</th>
@@ -211,6 +229,20 @@ export default function MembershipLedgerPage() {
                     )}
                   </td>
                   <td><span className={`status-badge status-${status}`}>{STATUS_LABEL[status]}</span></td>
+                  <td>
+                    {isAdmin ? (
+                      <input className="ledger-invitor-input" defaultValue={r.invitor || ''} onBlur={e => updateInvitor(r, e.target.value)} placeholder="-" />
+                    ) : (
+                      <span>{r.invitor || '-'}</span>
+                    )}
+                  </td>
+                  <td>
+                    {isAdmin ? (
+                      <input type="number" className="ledger-cell-input" defaultValue={r.attendance_count != null ? String(r.attendance_count) : '0'} onBlur={e => updateAttendance(r, e.target.value)} />
+                    ) : (
+                      <span>{r.attendance_count ?? 0}회</span>
+                    )}
+                  </td>
                   {MONTHS.map(m => (
                     <td key={m.key}>
                       {isAdmin ? (

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { supabase, Member, MemberStatus, STATUS_LABEL } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 import TopNav from '@/components/TopNav'
@@ -13,9 +14,15 @@ const STATUS_TABS: Array<{ key: 'all' | MemberStatus; label: string }> = [
   { key: 'alumni', label: '동문' },
 ]
 const STATUS_ORDER: Record<MemberStatus, number> = { member: 0, guest: 1, alumni: 2 }
+const FEE_PER_QUARTER = 30
+const OVERDUE_THRESHOLD_DAYS = 14
+const QUARTER_MONTHS: string[][] = [
+  ['jan', 'feb', 'mar'], ['apr', 'may', 'jun'], ['jul', 'aug', 'sep'], ['oct', 'nov', 'dec'],
+]
 
 export default function Home() {
   const { isAdmin } = useAuth()
+  const searchParams = useSearchParams()
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -24,6 +31,7 @@ export default function Home() {
   const [editing, setEditing] = useState<Member | null>(null)
   const [form, setForm] = useState({ name: '', join_date: '', status: 'member' as MemberStatus, gender: '' as 'M' | 'F' | '' })
   const [nameErr, setNameErr] = useState(false)
+  const [unpaidNames, setUnpaidNames] = useState<string[]>([])
 
   const [intro, setIntro] = useState('')
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
@@ -35,7 +43,26 @@ export default function Home() {
   useEffect(() => {
     fetchMembers()
     fetchIntro()
+    fetchOverdue()
+    const q = searchParams.get('q')
+    if (q) setSearch(q)
   }, [])
+
+  async function fetchOverdue() {
+    const now = new Date()
+    const quarterIdx = Math.floor(now.getMonth() / 3)
+    const months = QUARTER_MONTHS[quarterIdx]
+    const { data: memberRows } = await supabase.from('members').select('name').eq('status', 'member')
+    const { data: ledgerRows } = await supabase.from('membership_ledger').select(`member_name, ${months.join(', ')}`)
+    if (!memberRows || !ledgerRows) return
+    const paidSum: Record<string, number> = {}
+    ledgerRows.forEach((r: any) => {
+      const sum = months.reduce((s, m) => s + (Number(r[m]) || 0), 0)
+      paidSum[r.member_name] = sum
+    })
+    const unpaid = memberRows.filter((m: any) => (paidSum[m.name] || 0) < FEE_PER_QUARTER).map((m: any) => m.name)
+    setUnpaidNames(unpaid)
+  }
 
   async function fetchIntro() {
     const { data } = await supabase.from('club_info').select('intro, photo_url').eq('id', 1).single()
@@ -152,7 +179,25 @@ export default function Home() {
         {isAdmin && <button className="btn primary" onClick={openAdd}>+ 회원 추가</button>}
       </div>
 
+      {(() => {
+        const now = new Date()
+        const quarterIdx = Math.floor(now.getMonth() / 3)
+        const quarterStart = new Date(now.getFullYear(), quarterIdx * 3, 1)
+        const daysSince = Math.floor((now.getTime() - quarterStart.getTime()) / 86400000)
+        if (daysSince > OVERDUE_THRESHOLD_DAYS && unpaidNames.length > 0) {
+          return (
+            <div className="overdue-banner">
+              <span className="overdue-banner-icon">⚠</span>
+              이번 분기 시작 후 {daysSince}일 지났어요. 아직 회비를 안 내신 정회원이 <strong>{unpaidNames.length}명</strong> 있어요.
+              <span className="overdue-banner-names">({unpaidNames.slice(0, 6).join(', ')}{unpaidNames.length > 6 ? ' 외' : ''})</span>
+            </div>
+          )
+        }
+        return null
+      })()}
+
       <div className="intro-box">
+        <p className="intro-subtitle">소개글</p>
         {introEditing ? (
           <>
             {photoDraft && (

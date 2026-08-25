@@ -2,18 +2,18 @@ export default function GenderIcon({ gender, size = 18 }: { gender: 'M' | 'F' | 
   if (!gender) return <span style={{ display: 'inline-block', width: size }} />
   if (gender === 'F') {
     return (
-      <svg width={size} height={size * 1.35} viewBox="0 0 24 32" fill="none" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-        <circle cx="12" cy="10" r="7" stroke="#e0327e" strokeWidth="3" />
-        <line x1="12" y1="17" x2="12" y2="28" stroke="#e0327e" strokeWidth="3" strokeLinecap="round" />
-        <line x1="5" y1="22" x2="19" y2="22" stroke="#e0327e" strokeWidth="3" strokeLinecap="round" />
+      <svg width={size} height={size} viewBox="0 0 28 28" fill="none" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+        <circle cx="14" cy="10" r="6.5" stroke="#e0327e" strokeWidth="2.8" />
+        <line x1="14" y1="16.5" x2="14" y2="25" stroke="#e0327e" strokeWidth="2.8" strokeLinecap="round" />
+        <line x1="8.5" y1="21" x2="19.5" y2="21" stroke="#e0327e" strokeWidth="2.8" strokeLinecap="round" />
       </svg>
     )
   }
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-      <circle cx="13" cy="19" r="7" stroke="#144a72" strokeWidth="3" />
-      <line x1="18" y1="14" x2="26" y2="6" stroke="#144a72" strokeWidth="3" strokeLinecap="round" />
-      <polyline points="18,6 26,6 26,14" stroke="#144a72" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    <svg width={size} height={size} viewBox="0 0 28 28" fill="none" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+      <circle cx="11" cy="17" r="6.5" stroke="#144a72" strokeWidth="2.8" />
+      <line x1="15.5" y1="12.5" x2="23" y2="5" stroke="#144a72" strokeWidth="2.8" strokeLinecap="round" />
+      <polyline points="16,5 23,5 23,12" stroke="#144a72" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
     </svg>
   )
 }

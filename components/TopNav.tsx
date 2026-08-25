@@ -1,9 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { useAuth } from '@/lib/useAuth'
+import { supabase } from '@/lib/supabase'
 
 const NAV_ITEMS = [
   { href: '/', label: '회원' },
@@ -12,6 +13,7 @@ const NAV_ITEMS = [
   { href: '/gallery', label: '사진·동영상' },
   { href: '/games', label: '경기' },
   { href: '/policy', label: '모임 Policy' },
+  { href: '/etiquette', label: '테니스 에티켓' },
 ]
 
 function TennisBallIcon() {
@@ -40,8 +42,38 @@ function TennisBallIcon() {
 
 export default function TopNav() {
   const pathname = usePathname()
+  const router = useRouter()
   const { isAdmin, loginOpen, setLoginOpen, loginPin, setLoginPin, loginErr, handleLogin, handleLogout } = useAuth()
   const [logoError, setLogoError] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<{ label: string; count: number; href: string }[] | null>(null)
+  const [searching, setSearching] = useState(false)
+
+  async function runGlobalSearch(q: string) {
+    if (!q.trim()) { setSearchResults(null); return }
+    setSearching(true)
+    const like = `%${q}%`
+
+    const [membersRes, txnRes, ledgerRes, matchesRes] = await Promise.all([
+      supabase.from('members').select('id', { count: 'exact', head: true }).ilike('name', like),
+      supabase.from('transactions').select('id', { count: 'exact', head: true }).or(`person.ilike.${like},contents.ilike.${like}`),
+      supabase.from('membership_ledger').select('id', { count: 'exact', head: true }).ilike('member_name', like),
+      supabase.from('matches').select('team1, team2'),
+    ])
+
+    const matchCount = (matchesRes.data || []).filter((m: any) =>
+      (m.team1 || []).some((n: string) => n.includes(q)) || (m.team2 || []).some((n: string) => n.includes(q))
+    ).length
+
+    setSearchResults([
+      { label: '회원', count: membersRes.count || 0, href: `/?q=${encodeURIComponent(q)}` },
+      { label: '장부 내역', count: txnRes.count || 0, href: `/account?q=${encodeURIComponent(q)}` },
+      { label: '멤버십 장부', count: ledgerRes.count || 0, href: `/membership-ledger?q=${encodeURIComponent(q)}` },
+      { label: '경기 기록', count: matchCount, href: `/games?q=${encodeURIComponent(q)}` },
+    ])
+    setSearching(false)
+  }
 
   return (
     <>
@@ -59,6 +91,7 @@ export default function TopNav() {
           </div>
         </div>
         <div className="header-actions">
+          <button className="btn icon-only-btn" onClick={() => setSearchOpen(true)} title="통합 검색">🔍</button>
           {isAdmin ? (
             <button className="btn" onClick={handleLogout}>로그아웃</button>
           ) : (
@@ -78,6 +111,41 @@ export default function TopNav() {
           )
         })}
       </div>
+
+      {searchOpen && (
+        <div className="modal-overlay show" onClick={e => { if (e.target === e.currentTarget) setSearchOpen(false) }}>
+          <div className="modal">
+            <h2>통합 검색</h2>
+            <div className="field">
+              <input
+                autoFocus
+                value={searchQuery}
+                onChange={e => { setSearchQuery(e.target.value); runGlobalSearch(e.target.value) }}
+                placeholder="이름으로 검색 (회원/장부/경기 통합)"
+              />
+            </div>
+            {searching && <p className="upload-hint">검색 중...</p>}
+            {searchResults && (
+              <div className="search-results-list">
+                {searchResults.map(r => (
+                  <Link
+                    key={r.label}
+                    href={r.href}
+                    className="search-result-row"
+                    onClick={() => { setSearchOpen(false); setSearchQuery(''); setSearchResults(null) }}
+                  >
+                    <span>{r.label}</span>
+                    <span className="search-result-count">{r.count}건</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setSearchOpen(false)}>닫기</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {loginOpen && (
         <div className="modal-overlay show" onClick={e => { if (e.target === e.currentTarget) setLoginOpen(false) }}>
