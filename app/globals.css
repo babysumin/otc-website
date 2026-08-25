@@ -14,7 +14,7 @@ body{
   background-image:url('/court-bg.svg');
   background-repeat:no-repeat;
   background-position:top center;
-  background-size:auto 100vh;
+  background-size:100vw auto;
   background-attachment:fixed;
 }
 .court-line{height:4px;background:var(--accent);}
@@ -36,6 +36,10 @@ tbody td{white-space:nowrap;}
 .intro-box{margin-bottom:20px;}
 .intro-view{background:var(--card);border:2px solid var(--navy);border-radius:10px;padding:14px 16px;cursor:pointer;}
 .intro-subtitle{margin:0 0 8px;font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:0.5px;}
+.landing-count-card{display:inline-flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:10px 18px;margin-bottom:18px;}
+.landing-count-dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px var(--ok-bg);}
+.landing-count-label{font-size:13px;color:var(--text-sub);font-weight:600;}
+.landing-count-value{font-size:16px;color:var(--navy);font-weight:800;}
 .overdue-banner{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--danger-bg);border:1px solid #f2d3c8;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#8a3520;}
 .overdue-banner-icon{font-size:16px;}
 .overdue-banner-names{color:var(--text-sub);font-size:12px;}

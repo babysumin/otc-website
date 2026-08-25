@@ -101,13 +101,16 @@ function balancedRoundAttempt(
   skillMap: Record<string, number>,
   partnerFreq: Record<string, number>,
   usedPairs: Set<string>,
-  attempts = 400
+  attempts = 400,
+  genderMap?: Record<string, 'M' | 'F' | null>
 ): [string, string][] | null {
   const JITTER = 40
   const avg = averageFreq(players, partnerFreq)
   for (let attempt = 0; attempt < attempts; attempt++) {
     // 평균보다 압도적으로 많이 만난 조합이면 override. 시도가 늘어날수록 기준을 조금씩 완화해서 결국 성립되도록 함
     const overrideThreshold = avg + 1 + Math.floor(attempt / 80)
+    // 마지막 10% 시도까지는 여자+여자 페어를 최대한 피함 (여복이 아닌 상황에서)
+    const avoidFemalePairs = !!genderMap && attempt < attempts * 0.9
     const jittered = players.map(p => ({ p, score: (skillMap[p] || 0) + (Math.random() - 0.5) * JITTER }))
     jittered.sort((a, b) => b.score - a.score)
     const sorted = jittered.map(x => x.p)
@@ -125,7 +128,8 @@ function balancedRoundAttempt(
       const a = ordered[i], b = ordered[i + 1]
       const key = pairKey(a, b)
       const freq = partnerFreq[key] || 0
-      if (localUsed.has(key) || freq > overrideThreshold) { ok = false; break }
+      const isFemalePair = avoidFemalePairs && genderMap![a] === 'F' && genderMap![b] === 'F'
+      if (localUsed.has(key) || freq > overrideThreshold || isFemalePair) { ok = false; break }
       localUsed.add(key)
       pairs.push([a, b])
     }
@@ -244,8 +248,8 @@ function genderAwareRound(
     }
   }
 
-  // 성별 우선 매칭이 불가능하면 스킬 밸런스 기반 일반 매칭으로 진행
-  return balancedRoundAttempt(playing, skillMap, partnerFreq, usedPairs)
+  // 성별 우선 매칭이 불가능하면 스킬 밸런스 기반 일반 매칭으로 진행 (그래도 여자+여자 페어는 최대한 피함)
+  return balancedRoundAttempt(playing, skillMap, partnerFreq, usedPairs, 400, genderMap)
 }
 
 // 선수별로 참가한 대회(세션) 고유 개수 계산
@@ -551,6 +555,7 @@ function GamesPageInner() {
   const overallStats = useMemo(() => computeStats(allMatches), [allMatches])
   const eventCounts = useMemo(() => computeEventCounts(allMatches), [allMatches])
   const [collapsedQuarters, setCollapsedQuarters] = useState<Set<string>>(new Set())
+  const [collapsedRankingQuarters, setCollapsedRankingQuarters] = useState<Set<string>>(new Set())
 
   function toggleQuarterCollapse(quarter: string) {
     setCollapsedQuarters(prev => {
@@ -560,6 +565,40 @@ function GamesPageInner() {
       return next
     })
   }
+
+  function toggleRankingQuarterCollapse(quarter: string) {
+    setCollapsedRankingQuarters(prev => {
+      const next = new Set(prev)
+      if (next.has(quarter)) next.delete(quarter)
+      else next.add(quarter)
+      return next
+    })
+  }
+
+  // 1번: 랭킹을 분기별로 나눠서 계산 (세션 날짜 기준 분기 자동 판별)
+  const sessionQuarterMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    sessions.forEach(s => { map[s.id] = quarterLabel(s.session_date) })
+    return map
+  }, [sessions])
+
+  const rankingByQuarter = useMemo(() => {
+    const groups: Record<string, MatchRow[]> = {}
+    allMatches.forEach(m => {
+      if (!m.session_id) return
+      const q = sessionQuarterMap[m.session_id]
+      if (!q) return
+      if (!groups[q]) groups[q] = []
+      groups[q].push(m)
+    })
+    return Object.entries(groups)
+      .map(([quarter, matches]) => ({
+        quarter,
+        stats: computeStats(matches),
+        eventCounts: computeEventCounts(matches),
+      }))
+      .sort((a, b) => b.quarter.localeCompare(a.quarter))
+  }, [allMatches, sessionQuarterMap])
 
   // 10번: 개인별 전적
   const playerMatches = selectedPlayer
@@ -783,10 +822,12 @@ function GamesPageInner() {
 
       {tab === 'ranking' && !selectedPlayer && (
         <>
-          <p className="ranking-note">클럽 전체 누적 랭킹이에요. 이름을 클릭하면 개인별 전적을 볼 수 있어요. 승리 +{WIN_POINTS}P / 무승부 +{DRAW_POINTS}P / 패배 +{LOSE_POINTS}P 기준으로 계산돼요.</p>
+          <p className="ranking-note">승리 +{WIN_POINTS}P / 무승부 +{DRAW_POINTS}P / 패배 +{LOSE_POINTS}P 기준으로 계산돼요. 이름을 클릭하면 개인별 전적을 볼 수 있어요.</p>
+
+          <h3 className="subsection-title">전체 누적 랭킹</h3>
           {overallStats.length === 0 && <div className="empty">아직 결과가 입력된 경기가 없어요.</div>}
           {overallStats.length > 0 && (
-            <div className="table-wrap">
+            <div className="table-wrap" style={{ marginBottom: 24 }}>
               <table>
                 <thead>
                   <tr>
@@ -815,6 +856,48 @@ function GamesPageInner() {
               </table>
             </div>
           )}
+
+          <h3 className="subsection-title">분기별 랭킹</h3>
+          {rankingByQuarter.length === 0 && <div className="empty">아직 분기별 데이터가 없어요.</div>}
+          {rankingByQuarter.map(({ quarter, stats, eventCounts: qEventCounts }) => {
+            const collapsed = collapsedRankingQuarters.has(quarter)
+            return (
+              <div key={quarter} className="quarter-session-group">
+                <button className="quarter-toggle" onClick={() => toggleRankingQuarterCollapse(quarter)}>
+                  <span className={`quarter-toggle-arrow ${collapsed ? 'collapsed' : ''}`}>▾</span>
+                  <span className="gallery-quarter-title" style={{ margin: 0, border: 'none', padding: 0 }}>{quarter}</span>
+                  <span className="quarter-toggle-count">{stats.length}명 참가</span>
+                </button>
+                {!collapsed && (
+                  <div className="table-wrap" style={{ marginTop: 12 }}>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>순위</th><th>이름</th><th>경기수</th><th>승</th><th>무</th><th>패</th><th>승률</th><th>승점</th><th>득실</th><th>이벤트 참가</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {stats.map((s, i) => (
+                          <tr key={s.name}>
+                            <td className="rank-num">{i + 1}</td>
+                            <td className="name-cell player-name-link" onClick={() => setSelectedPlayer(s.name)}>{s.name}</td>
+                            <td>{s.games}</td>
+                            <td>{s.wins}</td>
+                            <td>{s.draws}</td>
+                            <td>{s.losses}</td>
+                            <td>{s.games > 0 ? `${((s.wins / s.games) * 100).toFixed(1)}%` : '-'}</td>
+                            <td className="ledger-total">{s.points}P</td>
+                            <td>{s.diff > 0 ? `+${s.diff}` : s.diff}</td>
+                            <td>{qEventCounts[s.name] || 0}회</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </>
       )}
 

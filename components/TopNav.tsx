@@ -7,13 +7,14 @@ import { useAuth } from '@/lib/useAuth'
 import { supabase } from '@/lib/supabase'
 
 const NAV_ITEMS = [
-  { href: '/', label: '회원' },
+  { href: '/members', label: '회원' },
   { href: '/account', label: '장부' },
   { href: '/membership-ledger', label: '멤버십 장부' },
   { href: '/gallery', label: '사진·동영상' },
   { href: '/games', label: '경기' },
   { href: '/policy', label: '모임 Policy' },
   { href: '/etiquette', label: '테니스 에티켓' },
+  { href: '/assistant', label: 'AI 도우미' },
 ]
 
 function TennisBallIcon() {
@@ -67,7 +68,7 @@ export default function TopNav() {
     ).length
 
     setSearchResults([
-      { label: '회원', count: membersRes.count || 0, href: `/?q=${encodeURIComponent(q)}` },
+      { label: '회원', count: membersRes.count || 0, href: `/members?q=${encodeURIComponent(q)}` },
       { label: '장부 내역', count: txnRes.count || 0, href: `/account?q=${encodeURIComponent(q)}` },
       { label: '멤버십 장부', count: ledgerRes.count || 0, href: `/membership-ledger?q=${encodeURIComponent(q)}` },
       { label: '경기 기록', count: matchCount, href: `/games?q=${encodeURIComponent(q)}` },
@@ -78,7 +79,7 @@ export default function TopNav() {
   return (
     <>
       <div className="header">
-        <div className="brand">
+        <Link href="/" className="brand">
           {logoError ? (
             <div className="mark">OTC</div>
           ) : (
@@ -89,7 +90,7 @@ export default function TopNav() {
             <h1>On the Court</h1>
             <p>San Diego Korean Tennis Club</p>
           </div>
-        </div>
+        </Link>
         <div className="header-actions">
           <button className="btn icon-only-btn" onClick={() => setSearchOpen(true)} title="통합 검색">🔍</button>
           {isAdmin ? (
