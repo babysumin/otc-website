@@ -128,7 +128,13 @@ export default function GalleryPage() {
         })
       }
     }
-    return Array.from(quarterMap.entries()).map(([quarter, eventMap]) => ({
+    return Array.from(quarterMap.entries())
+      .sort((a, b) => {
+        if (a[0] === UNSPECIFIED_Q) return 1
+        if (b[0] === UNSPECIFIED_Q) return -1
+        return b[0].localeCompare(a[0])
+      })
+      .map(([quarter, eventMap]) => ({
       quarter,
       events: Array.from(eventMap.entries()),
     }))
