@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
 
+const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || ''
+
 export function useAuth() {
   const [session, setSession] = useState<any>(null)
   const [loginOpen, setLoginOpen] = useState(false)
-  const [loginEmail, setLoginEmail] = useState('')
-  const [loginPassword, setLoginPassword] = useState('')
+  const [loginPin, setLoginPin] = useState('')
   const [loginErr, setLoginErr] = useState('')
   const isAdmin = !!session
 
@@ -19,14 +20,17 @@ export function useAuth() {
 
   async function handleLogin() {
     setLoginErr('')
-    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword })
+    if (!ADMIN_EMAIL) {
+      setLoginErr('관리자 설정이 안 되어 있어요')
+      return
+    }
+    const { error } = await supabase.auth.signInWithPassword({ email: ADMIN_EMAIL, password: loginPin })
     if (error) {
-      setLoginErr('이메일 또는 비밀번호가 올바르지 않아요')
+      setLoginErr('PIN이 올바르지 않아요')
       return
     }
     setLoginOpen(false)
-    setLoginEmail('')
-    setLoginPassword('')
+    setLoginPin('')
   }
 
   async function handleLogout() {
@@ -34,7 +38,7 @@ export function useAuth() {
   }
 
   return {
-    isAdmin, loginOpen, setLoginOpen, loginEmail, setLoginEmail,
-    loginPassword, setLoginPassword, loginErr, handleLogin, handleLogout,
+    isAdmin, loginOpen, setLoginOpen, loginPin, setLoginPin,
+    loginErr, handleLogin, handleLogout,
   }
 }

@@ -14,7 +14,7 @@ const NAV_ITEMS = [
 
 export default function TopNav() {
   const pathname = usePathname()
-  const { isAdmin, loginOpen, setLoginOpen, loginEmail, setLoginEmail, loginPassword, setLoginPassword, loginErr, handleLogin, handleLogout } = useAuth()
+  const { isAdmin, loginOpen, setLoginOpen, loginPin, setLoginPin, loginErr, handleLogin, handleLogout } = useAuth()
   const [logoError, setLogoError] = useState(false)
 
   return (
@@ -54,12 +54,18 @@ export default function TopNav() {
           <div className="modal">
             <h2>관리자 로그인</h2>
             <div className="field">
-              <label>이메일</label>
-              <input type="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="you@example.com" />
-            </div>
-            <div className="field">
-              <label>비밀번호</label>
-              <input type="password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleLogin() }} />
+              <label>PIN</label>
+              <input
+                type="password"
+                inputMode="numeric"
+                maxLength={4}
+                autoFocus
+                value={loginPin}
+                onChange={e => setLoginPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                onKeyDown={e => { if (e.key === 'Enter') handleLogin() }}
+                placeholder="••••"
+                className="pin-input"
+              />
               {loginErr && <div className="err">{loginErr}</div>}
             </div>
             <div className="modal-actions">
