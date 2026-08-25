@@ -616,20 +616,20 @@ function GamesPageInner() {
   const activeStats = useMemo(() => computeStats(activeMatches), [activeMatches])
   const [rankingGroupFilter, setRankingGroupFilter] = useState<'all' | 'A' | 'B'>('all')
 
-  // 8번: 회원의 랭킹전 그룹 정보로 매치를 필터링
-  const nameToRankingGroup = useMemo(() => {
-    const map: Record<string, 'A' | 'B' | null> = {}
-    members.forEach(m => { map[m.name] = m.ranking_group })
+  // 1번: 대회 생성시 이미 지정한 조(A조/B조) 정보를 그대로 분석해서 자동으로 그룹별 랭킹 분리
+  const sessionGroupMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    sessions.forEach(s => { map[s.id] = s.group_label })
     return map
-  }, [members])
+  }, [sessions])
 
   function matchInGroup(m: MatchRow, group: 'all' | 'A' | 'B') {
     if (group === 'all') return true
-    const allPlayers = [...m.team1, ...m.team2]
-    return allPlayers.every(p => nameToRankingGroup[p] === group)
+    if (!m.session_id) return false
+    return sessionGroupMap[m.session_id] === group
   }
 
-  const groupFilteredMatches = useMemo(() => allMatches.filter(m => matchInGroup(m, rankingGroupFilter)), [allMatches, rankingGroupFilter, nameToRankingGroup])
+  const groupFilteredMatches = useMemo(() => allMatches.filter(m => matchInGroup(m, rankingGroupFilter)), [allMatches, rankingGroupFilter, sessionGroupMap])
 
   const overallStats = useMemo(() => computeStats(groupFilteredMatches), [groupFilteredMatches])
   const eventCounts = useMemo(() => computeEventCounts(groupFilteredMatches), [groupFilteredMatches])
@@ -945,7 +945,7 @@ function GamesPageInner() {
             </select>
           </div>
           {rankingGroupFilter !== 'all' && (
-            <p className="upload-hint">회원 페이지에서 랭킹전 그룹을 지정한 선수들끼리만 뛴 경기만 집계돼요.</p>
+            <p className="upload-hint">대회 생성할 때 지정한 조(A조/B조) 기준으로 자동 분류돼요.</p>
           )}
 
           <h3 className="subsection-title">전체 누적 랭킹</h3>

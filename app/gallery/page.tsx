@@ -3,9 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
-import { useMemberAuth } from '@/lib/useMemberAuth'
 import TopNav from '@/components/TopNav'
-import MemberGate from '@/components/MemberGate'
 
 type MediaItem = {
   id: string
@@ -24,7 +22,6 @@ const UNSPECIFIED_EVENT = '기타'
 
 export default function GalleryPage() {
   const { isAdmin } = useAuth()
-  const { isMember, pwInput, setPwInput, pwErr, checkPassword } = useMemberAuth()
   const [items, setItems] = useState<MediaItem[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -159,18 +156,6 @@ export default function GalleryPage() {
     for (const it of withOrder) {
       await supabase.from('gallery_items').update({ sort_order: it.sortOrder }).eq('id', it.id)
     }
-  }
-
-  if (!isMember) {
-    return (
-      <div className="wrap">
-        <TopNav />
-        <div className="section-header">
-          <h2 className="section-title">사진 · 동영상</h2>
-        </div>
-        <MemberGate title="사진 · 동영상" pwInput={pwInput} setPwInput={setPwInput} pwErr={pwErr} checkPassword={checkPassword} />
-      </div>
-    )
   }
 
   return (

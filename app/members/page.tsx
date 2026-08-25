@@ -32,7 +32,7 @@ function MembersPageInner() {
   const [statusTab, setStatusTab] = useState<'all' | MemberStatus>('all')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Member | null>(null)
-  const [form, setForm] = useState({ name: '', join_date: '', status: 'member' as MemberStatus, gender: '' as 'M' | 'F' | '', ranking_group: '' as 'A' | 'B' | '' })
+  const [form, setForm] = useState({ name: '', join_date: '', status: 'member' as MemberStatus, gender: '' as 'M' | 'F' | '' })
   const [nameErr, setNameErr] = useState(false)
   const [unpaidNames, setUnpaidNames] = useState<string[]>([])
 
@@ -71,12 +71,6 @@ function MembersPageInner() {
     await supabase.from('members').update({ status }).eq('id', m.id)
   }
 
-  async function changeRankingGroup(m: Member, group: 'A' | 'B' | '') {
-    const next = group === '' ? null : group
-    setMembers(prev => prev.map(x => (x.id === m.id ? { ...x, ranking_group: next } : x)))
-    await supabase.from('members').update({ ranking_group: next }).eq('id', m.id)
-  }
-
   async function toggleOfficer(m: Member) {
     const updated = { ...m, is_officer: !m.is_officer }
     setMembers(prev => prev.map(x => (x.id === m.id ? updated : x)))
@@ -85,14 +79,14 @@ function MembersPageInner() {
 
   function openAdd() {
     setEditing(null)
-    setForm({ name: '', join_date: '', status: 'member', gender: '', ranking_group: '' })
+    setForm({ name: '', join_date: '', status: 'member', gender: '' })
     setNameErr(false)
     setModalOpen(true)
   }
 
   function openEdit(m: Member) {
     setEditing(m)
-    setForm({ name: m.name, join_date: m.join_date || '', status: m.status, gender: m.gender || '', ranking_group: m.ranking_group || '' })
+    setForm({ name: m.name, join_date: m.join_date || '', status: m.status, gender: m.gender || '' })
     setNameErr(false)
     setModalOpen(true)
   }
@@ -105,7 +99,7 @@ function MembersPageInner() {
     if (editing) {
       const { error } = await supabase
         .from('members')
-        .update({ name: form.name, join_date: form.join_date, status: form.status, gender: form.gender || null, ranking_group: form.ranking_group || null })
+        .update({ name: form.name, join_date: form.join_date, status: form.status, gender: form.gender || null })
         .eq('id', editing.id)
       if (!error) fetchMembers()
     } else {
@@ -114,7 +108,6 @@ function MembersPageInner() {
         join_date: form.join_date,
         status: form.status,
         gender: form.gender || null,
-        ranking_group: form.ranking_group || null,
       })
       if (!error) fetchMembers()
     }
@@ -208,7 +201,7 @@ function MembersPageInner() {
         <table>
           <thead>
             <tr>
-              <th>이름</th><th>성별</th><th>상태</th><th>랭킹전 그룹</th><th>가입 시기</th><th></th>
+              <th>이름</th><th>성별</th><th>상태</th><th>가입 시기</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -238,21 +231,6 @@ function MembersPageInner() {
                     </select>
                   ) : (
                     <span className={`status-badge status-${m.status}`}>{STATUS_LABEL[m.status]}</span>
-                  )}
-                </td>
-                <td>
-                  {isAdmin ? (
-                    <select
-                      className="gender-select"
-                      value={m.ranking_group || ''}
-                      onChange={e => changeRankingGroup(m, e.target.value as 'A' | 'B' | '')}
-                    >
-                      <option value="">-</option>
-                      <option value="A">A그룹</option>
-                      <option value="B">B그룹</option>
-                    </select>
-                  ) : (
-                    <span>{m.ranking_group ? `${m.ranking_group}그룹` : '-'}</span>
                   )}
                 </td>
                 <td>{m.join_date || '-'}</td>
@@ -287,14 +265,6 @@ function MembersPageInner() {
                 <option value="">선택 안 함</option>
                 <option value="M">남</option>
                 <option value="F">여</option>
-              </select>
-            </div>
-            <div className="field">
-              <label>랭킹전 그룹</label>
-              <select value={form.ranking_group} onChange={e => setForm({ ...form, ranking_group: e.target.value as 'A' | 'B' | '' })}>
-                <option value="">미지정</option>
-                <option value="A">A그룹</option>
-                <option value="B">B그룹</option>
               </select>
             </div>
             <div className="field">

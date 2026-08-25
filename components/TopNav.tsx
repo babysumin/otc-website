@@ -7,15 +7,15 @@ import { useAuth } from '@/lib/useAuth'
 import { supabase } from '@/lib/supabase'
 
 const NAV_ITEMS = [
+  { href: '/', label: '홈' },
+  { href: '/gallery', label: '사진·동영상' },
   { href: '/members', label: '회원' },
   { href: '/account', label: '장부' },
   { href: '/membership-ledger', label: '멤버십 장부' },
-  { href: '/gallery', label: '사진·동영상' },
   { href: '/games', label: '경기' },
   { href: '/policy', label: '모임 Policy' },
   { href: '/etiquette', label: '테니스 에티켓' },
   { href: '/suggestions', label: '익명 마음의 소리' },
-  { href: '/assistant', label: 'AI 도우미' },
 ]
 
 function TennisBallIcon() {
@@ -47,6 +47,7 @@ export default function TopNav() {
   const router = useRouter()
   const { isAdmin, loginOpen, setLoginOpen, loginPin, setLoginPin, loginErr, handleLogin, handleLogout } = useAuth()
   const [logoError, setLogoError] = useState(false)
+  const [navMenuOpen, setNavMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<{ label: string; count: number; href: string }[] | null>(null)
@@ -93,7 +94,16 @@ export default function TopNav() {
           </div>
         </Link>
         <div className="header-actions">
+          <Link href="/" className={`tab ${pathname === '/' ? 'active' : ''}`}>
+            {pathname === '/' && <TennisBallIcon />}
+            홈
+          </Link>
+          <Link href="/gallery" className={`tab ${pathname === '/gallery' ? 'active' : ''}`}>
+            {pathname === '/gallery' && <TennisBallIcon />}
+            사진·동영상
+          </Link>
           <button className="btn icon-only-btn" onClick={() => setSearchOpen(true)} title="통합 검색">🔍</button>
+          <button className="btn nav-menu-btn" onClick={() => setNavMenuOpen(true)}>☰ 메뉴</button>
           {isAdmin ? (
             <button className="btn" onClick={handleLogout}>로그아웃</button>
           ) : (
@@ -102,17 +112,28 @@ export default function TopNav() {
         </div>
       </div>
 
-      <div className="tabs">
-        {NAV_ITEMS.map(item => {
-          const isActive = pathname === item.href
-          return (
-            <Link key={item.href} href={item.href} className={`tab ${isActive ? 'active' : ''}`}>
-              {isActive && <TennisBallIcon />}
-              {item.label}
-            </Link>
-          )
-        })}
-      </div>
+      {navMenuOpen && (
+        <div className="modal-overlay show" onClick={e => { if (e.target === e.currentTarget) setNavMenuOpen(false) }}>
+          <div className="modal">
+            <h2>메뉴</h2>
+            <div className="search-results-list">
+              {NAV_ITEMS.map(item => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="search-result-row"
+                  onClick={() => setNavMenuOpen(false)}
+                >
+                  <span>{pathname === item.href ? '● ' : ''}{item.label}</span>
+                </Link>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setNavMenuOpen(false)}>닫기</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {searchOpen && (
         <div className="modal-overlay show" onClick={e => { if (e.target === e.currentTarget) setSearchOpen(false) }}>
