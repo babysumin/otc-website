@@ -12,7 +12,9 @@ type LedgerRow = {
   member_name: string
   status: string
   invitor: string | null
-  attendance_count: number | null
+  attendance_date_1: string | null
+  attendance_date_2: string | null
+  attendance_date_3: string | null
   jan: number | null; feb: number | null; mar: number | null; apr: number | null
   may: number | null; jun: number | null; jul: number | null; aug: number | null
   sep: number | null; oct: number | null; nov: number | null; dec: number | null
@@ -108,10 +110,10 @@ function MembershipLedgerPageInner() {
     await supabase.from('membership_ledger').update({ invitor: value || null }).eq('id', row.id)
   }
 
-  async function updateAttendance(row: LedgerRow, value: string) {
-    const num = value === '' ? 0 : Number(value)
-    setRows(prev => prev.map(r => (r.id === row.id ? { ...r, attendance_count: num } : r)))
-    await supabase.from('membership_ledger').update({ attendance_count: num }).eq('id', row.id)
+  async function updateAttendanceDate(row: LedgerRow, field: 'attendance_date_1' | 'attendance_date_2' | 'attendance_date_3', value: string) {
+    const val = value || null
+    setRows(prev => prev.map(r => (r.id === row.id ? { ...r, [field]: val } : r)))
+    await supabase.from('membership_ledger').update({ [field]: val }).eq('id', row.id)
   }
 
   function effectiveStatus(r: LedgerRow): MemberStatus {
@@ -194,16 +196,20 @@ function MembershipLedgerPageInner() {
           <thead>
             <tr>
               <th rowSpan={2}>이름</th><th rowSpan={2}>성별</th><th rowSpan={2}>상태</th>
-              <th rowSpan={2}>초대자</th><th rowSpan={2}>참석횟수</th>
               <th colSpan={3} className="quarter-head">1분기</th>
               <th colSpan={3} className="quarter-head">2분기</th>
               <th colSpan={3} className="quarter-head">3분기</th>
               <th colSpan={3} className="quarter-head">4분기</th>
               <th rowSpan={2}>합계</th>
+              <th rowSpan={2}>초대자</th>
+              <th colSpan={3} className="quarter-head">참석 (3회시 정회원 전환)</th>
               <th rowSpan={2}>메모</th>
             </tr>
             <tr>
               {MONTHS.map(m => <th key={m.key} className="month-subhead">{m.label}</th>)}
+              <th className="month-subhead">1회차</th>
+              <th className="month-subhead">2회차</th>
+              <th className="month-subhead">3회차</th>
             </tr>
           </thead>
           <tbody>
@@ -229,20 +235,6 @@ function MembershipLedgerPageInner() {
                     )}
                   </td>
                   <td><span className={`status-badge status-${status}`}>{STATUS_LABEL[status]}</span></td>
-                  <td>
-                    {isAdmin ? (
-                      <input className="ledger-invitor-input" defaultValue={r.invitor || ''} onBlur={e => updateInvitor(r, e.target.value)} placeholder="-" />
-                    ) : (
-                      <span>{r.invitor || '-'}</span>
-                    )}
-                  </td>
-                  <td>
-                    {isAdmin ? (
-                      <input type="number" className="ledger-cell-input" defaultValue={r.attendance_count != null ? String(r.attendance_count) : '0'} onBlur={e => updateAttendance(r, e.target.value)} />
-                    ) : (
-                      <span>{r.attendance_count ?? 0}회</span>
-                    )}
-                  </td>
                   {MONTHS.map(m => (
                     <td key={m.key}>
                       {isAdmin ? (
@@ -259,6 +251,34 @@ function MembershipLedgerPageInner() {
                     </td>
                   ))}
                   <td className="ledger-total">${rowTotal(r).toLocaleString('en-US')}</td>
+                  <td>
+                    {isAdmin ? (
+                      <input className="ledger-invitor-input" defaultValue={r.invitor || ''} onBlur={e => updateInvitor(r, e.target.value)} placeholder="-" />
+                    ) : (
+                      <span>{r.invitor || '-'}</span>
+                    )}
+                  </td>
+                  <td>
+                    {isAdmin ? (
+                      <input type="date" className="ledger-date-input" defaultValue={r.attendance_date_1 || ''} onBlur={e => updateAttendanceDate(r, 'attendance_date_1', e.target.value)} />
+                    ) : (
+                      <span>{r.attendance_date_1 || '-'}</span>
+                    )}
+                  </td>
+                  <td>
+                    {isAdmin ? (
+                      <input type="date" className="ledger-date-input" defaultValue={r.attendance_date_2 || ''} onBlur={e => updateAttendanceDate(r, 'attendance_date_2', e.target.value)} />
+                    ) : (
+                      <span>{r.attendance_date_2 || '-'}</span>
+                    )}
+                  </td>
+                  <td>
+                    {isAdmin ? (
+                      <input type="date" className="ledger-date-input" defaultValue={r.attendance_date_3 || ''} onBlur={e => updateAttendanceDate(r, 'attendance_date_3', e.target.value)} />
+                    ) : (
+                      <span>{r.attendance_date_3 || '-'}</span>
+                    )}
+                  </td>
                   <td className="memo-cell-ledger">
                     {isAdmin ? (
                       <input

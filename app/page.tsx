@@ -174,28 +174,6 @@ function HomeInner() {
     <div className="wrap">
       <TopNav />
 
-      <div className="section-header">
-        <h2 className="section-title">회원</h2>
-        {isAdmin && <button className="btn primary" onClick={openAdd}>+ 회원 추가</button>}
-      </div>
-
-      {(() => {
-        const now = new Date()
-        const quarterIdx = Math.floor(now.getMonth() / 3)
-        const quarterStart = new Date(now.getFullYear(), quarterIdx * 3, 1)
-        const daysSince = Math.floor((now.getTime() - quarterStart.getTime()) / 86400000)
-        if (daysSince > OVERDUE_THRESHOLD_DAYS && unpaidNames.length > 0) {
-          return (
-            <div className="overdue-banner">
-              <span className="overdue-banner-icon">⚠</span>
-              이번 분기 시작 후 {daysSince}일 지났어요. 아직 회비를 안 내신 정회원이 <strong>{unpaidNames.length}명</strong> 있어요.
-              <span className="overdue-banner-names">({unpaidNames.slice(0, 6).join(', ')}{unpaidNames.length > 6 ? ' 외' : ''})</span>
-            </div>
-          )
-        }
-        return null
-      })()}
-
       <div className="intro-box">
         <p className="intro-subtitle">소개글</p>
         {introEditing ? (
@@ -235,6 +213,28 @@ function HomeInner() {
           </div>
         )}
       </div>
+
+      <div className="section-header">
+        <h2 className="section-title">회원</h2>
+        {isAdmin && <button className="btn primary" onClick={openAdd}>+ 회원 추가</button>}
+      </div>
+
+      {(() => {
+        const now = new Date()
+        const quarterIdx = Math.floor(now.getMonth() / 3)
+        const quarterStart = new Date(now.getFullYear(), quarterIdx * 3, 1)
+        const daysSince = Math.floor((now.getTime() - quarterStart.getTime()) / 86400000)
+        if (daysSince > OVERDUE_THRESHOLD_DAYS && unpaidNames.length > 0) {
+          return (
+            <div className="overdue-banner">
+              <span className="overdue-banner-icon">⚠</span>
+              이번 분기 시작 후 {daysSince}일 지났어요. 아직 회비를 안 내신 정회원이 <strong>{unpaidNames.length}명</strong> 있어요.
+              <span className="overdue-banner-names">({unpaidNames.slice(0, 6).join(', ')}{unpaidNames.length > 6 ? ' 외' : ''})</span>
+            </div>
+          )
+        }
+        return null
+      })()}
 
       <div className="subtabs">
         {STATUS_TABS.map(t => (

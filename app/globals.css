@@ -47,6 +47,7 @@ tbody td{white-space:nowrap;}
 .player-name-link{cursor:pointer;color:var(--navy);text-decoration:underline;text-decoration-color:var(--line-strong);}
 .quarter-session-group{margin-bottom:28px;}
 .ledger-invitor-input{width:90px;height:28px;border:1px solid var(--line-strong);border-radius:6px;font-size:12px;padding:0 8px;}
+.ledger-date-input{width:120px;height:28px;border:1px solid var(--line-strong);border-radius:6px;font-size:12px;padding:0 6px;}
 .intro-view:hover{background:#fafbfc;}
 .intro-view p{margin:0;font-size:13.5px;color:var(--text);white-space:pre-wrap;line-height:1.5;}
 .intro-placeholder{color:var(--text-faint) !important;}
