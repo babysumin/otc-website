@@ -87,6 +87,9 @@ body{
 .round-group{margin-bottom:14px;}
 .round-label{font-size:12px;font-weight:700;color:var(--text-sub);margin:0 0 6px;}
 .session-info-list{margin:0;padding-left:18px;font-size:13.5px;line-height:2;color:var(--text);}
+.match-info-box{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:8px;padding:12px 16px;margin-bottom:18px;}
+.match-info-title{font-size:13px;font-weight:700;margin:0 0 6px;color:var(--navy);}
+.match-info-list{margin:0;padding-left:18px;font-size:12.5px;line-height:1.7;color:var(--text-sub);}
 .kdk-options{display:flex;gap:16px;flex-wrap:wrap;margin:14px 0;padding:12px;background:var(--bg);border-radius:8px;}
 .kdk-option{display:flex;flex-direction:column;gap:4px;}
 .kdk-option label{font-size:12px;color:var(--text-sub);font-weight:600;}

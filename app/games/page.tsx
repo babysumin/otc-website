@@ -313,6 +313,16 @@ export default function GamesPage() {
         <h2 className="section-title">경기 (KDK 복식)</h2>
       </div>
 
+      <div className="match-info-box">
+        <p className="match-info-title">매칭은 이렇게 이뤄져요</p>
+        <ul className="match-info-list">
+          <li>선택한 인원을 4명씩 묶어서 2:2 복식 매치를 자동으로 만들어요.</li>
+          <li>라운드가 진행될수록 같은 파트너와 다시 짝이 되지 않도록 자동으로 조정돼요.</li>
+          <li>참가 인원이 4명 단위가 아니면, 매 라운드마다 그때까지 가장 많이 뛴 사람이 우선 한 라운드 쉬고 나머지끼리 경기해요.</li>
+          <li>원하는 게임수를 다 못 채우면, 실제로 몇 게임까지 가능한지 미리 확인창으로 알려드려요.</li>
+        </ul>
+      </div>
+
       <div className="subtabs">
         <button className={`subtab ${tab === 'sessions' ? 'active' : ''}`} onClick={() => setTab('sessions')}>대회 목록</button>
         {isAdmin && <button className={`subtab ${tab === 'create' ? 'active' : ''}`} onClick={() => setTab('create')}>대회 생성</button>}
