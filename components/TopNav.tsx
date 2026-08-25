@@ -16,20 +16,24 @@ const NAV_ITEMS = [
 
 function TennisBallIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" className="tennis-ball-icon">
-      <circle cx="12" cy="12" r="11" fill="#c3d92c" />
-      <path
-        d="M12 1 C7 4, 7 20, 12 23"
-        fill="none"
-        stroke="#f5fadb"
-        strokeWidth="2"
-      />
-      <path
-        d="M12 1 C17 4, 17 20, 12 23"
-        fill="none"
-        stroke="#f5fadb"
-        strokeWidth="2"
-      />
+    <svg width="15" height="15" viewBox="0 0 24 24" className="tennis-ball-icon">
+      <g transform="rotate(28 12 12)">
+        <circle cx="12" cy="12" r="11" fill="#c3d92c" stroke="#ffffff" strokeWidth="1.2" />
+        <path
+          d="M9,2 C3,6 3,18 9,22"
+          fill="none"
+          stroke="#eef7c8"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+        <path
+          d="M15,2 C21,6 21,18 15,22"
+          fill="none"
+          stroke="#eef7c8"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+      </g>
     </svg>
   )
 }
