@@ -57,15 +57,57 @@ function pairKey(a: string, b: string) {
   return [a, b].sort().join('::')
 }
 
+// 이번 분기 동안 누가 누구와 몇 번 파트너/상대로 만났는지 계산 (편중 방지용)
+function computeQuarterFrequencies(sessions: SessionRow[], allMatches: MatchRow[]) {
+  const now = new Date()
+  const yy = String(now.getFullYear()).slice(2)
+  const currentQ = `${yy}Q${Math.floor(now.getMonth() / 3) + 1}`
+  const quarterSessionIds = new Set(sessions.filter(s => quarterLabel(s.session_date) === currentQ).map(s => s.id))
+  const quarterMatches = allMatches.filter(m => m.session_id && quarterSessionIds.has(m.session_id))
+
+  const partnerFreq: Record<string, number> = {}
+  const oppFreq: Record<string, number> = {}
+
+  function bump(map: Record<string, number>, a: string, b: string) {
+    const key = pairKey(a, b)
+    map[key] = (map[key] || 0) + 1
+  }
+
+  for (const m of quarterMatches) {
+    if (m.team1.length === 2) bump(partnerFreq, m.team1[0], m.team1[1])
+    if (m.team2.length === 2) bump(partnerFreq, m.team2[0], m.team2[1])
+    for (const a of m.team1) for (const b of m.team2) bump(oppFreq, a, b)
+  }
+
+  return { partnerFreq, oppFreq }
+}
+
 // 3번: 스킬(분기 승점) 기반 밸런스 매칭. 강한 사람+약한 사람을 파트너로 묶어 팀 합산 실력을 비슷하게 맞춤.
+// 4번: 단, 이미 파트너로 너무 자주 만난 조합이면(overThreshold) override해서 다른 조합으로 시도.
+// 선택된 인원 안에서 파트너/상대 조합 빈도의 평균을 계산 (상대적 편중 판단 기준)
+function averageFreq(players: string[], freqMap: Record<string, number>): number {
+  let total = 0, count = 0
+  for (let i = 0; i < players.length; i++) {
+    for (let j = i + 1; j < players.length; j++) {
+      total += freqMap[pairKey(players[i], players[j])] || 0
+      count++
+    }
+  }
+  return count > 0 ? total / count : 0
+}
+
 function balancedRoundAttempt(
   players: string[],
   skillMap: Record<string, number>,
+  partnerFreq: Record<string, number>,
   usedPairs: Set<string>,
-  attempts = 300
+  attempts = 400
 ): [string, string][] | null {
   const JITTER = 40
+  const avg = averageFreq(players, partnerFreq)
   for (let attempt = 0; attempt < attempts; attempt++) {
+    // 평균보다 압도적으로 많이 만난 조합이면 override. 시도가 늘어날수록 기준을 조금씩 완화해서 결국 성립되도록 함
+    const overrideThreshold = avg + 1 + Math.floor(attempt / 80)
     const jittered = players.map(p => ({ p, score: (skillMap[p] || 0) + (Math.random() - 0.5) * JITTER }))
     jittered.sort((a, b) => b.score - a.score)
     const sorted = jittered.map(x => x.p)
@@ -82,7 +124,8 @@ function balancedRoundAttempt(
     for (let i = 0; i < ordered.length; i += 2) {
       const a = ordered[i], b = ordered[i + 1]
       const key = pairKey(a, b)
-      if (localUsed.has(key)) { ok = false; break }
+      const freq = partnerFreq[key] || 0
+      if (localUsed.has(key) || freq > overrideThreshold) { ok = false; break }
       localUsed.add(key)
       pairs.push([a, b])
     }
@@ -91,14 +134,39 @@ function balancedRoundAttempt(
   return null
 }
 
-// 페어들을 합산 실력이 비슷한 것끼리 묶어서 매치(팀 vs 팀)로 구성
-function groupPairsIntoBalancedMatches(pairs: [string, string][], skillMap: Record<string, number>): [string, string][] {
+// 페어들을 합산 실력이 비슷한 것끼리 묶어서 매치(팀 vs 팀)로 구성. 상대전적이 평균보다 압도적으로 많으면 순서를 살짝 바꿔서 완화.
+function groupPairsIntoBalancedMatches(
+  pairs: [string, string][],
+  skillMap: Record<string, number>,
+  oppFreq: Record<string, number>
+): [string, string][] {
   const withScore = pairs.map(pair => ({
     pair,
     score: (skillMap[pair[0]] || 0) + (skillMap[pair[1]] || 0),
   }))
   withScore.sort((a, b) => b.score - a.score)
-  return withScore.map(x => x.pair)
+  const ordered = withScore.map(x => x.pair)
+
+  function oppFreqOf(p1: [string, string], p2: [string, string]) {
+    let sum = 0
+    for (const a of p1) for (const b of p2) sum += oppFreq[pairKey(a, b)] || 0
+    return sum
+  }
+
+  const allPlayers = pairs.flat()
+  const oppAvg = averageFreq(allPlayers, oppFreq) * 4 // 팀당 2명씩, 4개 조합이 합산되므로 스케일 맞춤
+
+  // 인접한 두 팀의 상대전적이 평균보다 압도적으로 많으면, 바로 옆 조합과 한 번씩 스왑해서 완화 시도
+  for (let i = 0; i + 1 < ordered.length; i += 2) {
+    const currentFreq = oppFreqOf(ordered[i], ordered[i + 1])
+    if (currentFreq > oppAvg + 1 && i + 3 < ordered.length) {
+      const altFreq = oppFreqOf(ordered[i], ordered[i + 3])
+      if (altFreq < currentFreq) {
+        ;[ordered[i + 1], ordered[i + 3]] = [ordered[i + 3], ordered[i + 1]]
+      }
+    }
+  }
+  return ordered
 }
 
 function tryMatchRound(players: string[], usedPairs: Set<string>, attempts = 300): [string, string][] | null {
@@ -125,19 +193,22 @@ function genderAwareRound(
   playing: string[],
   genderMap: Record<string, 'M' | 'F' | null>,
   skillMap: Record<string, number>,
+  partnerFreq: Record<string, number>,
   usedPairs: Set<string>
 ): [string, string][] | null {
   const females = playing.filter(p => genderMap[p] === 'F')
   const others = playing.filter(p => genderMap[p] !== 'F')
 
   if (females.length > 0 && females.length % 4 === 0) {
-    const femaleRound = balancedRoundAttempt(females, skillMap, usedPairs)
-    const otherRound = others.length > 0 ? balancedRoundAttempt(others, skillMap, usedPairs) : []
+    const femaleRound = balancedRoundAttempt(females, skillMap, partnerFreq, usedPairs)
+    const otherRound = others.length > 0 ? balancedRoundAttempt(others, skillMap, partnerFreq, usedPairs) : []
     if (femaleRound && otherRound) return [...femaleRound, ...otherRound]
   }
 
   if (females.length >= 2 && others.length >= 2) {
+    const avg = averageFreq(playing, partnerFreq)
     for (let attempt = 0; attempt < 100; attempt++) {
+      const overrideThreshold = avg + 1 + Math.floor(attempt / 40)
       const JITTER = 40
       const sortedFemales = [...females].sort((a, b) => ((skillMap[b] || 0) + (Math.random() - 0.5) * JITTER) - ((skillMap[a] || 0) + (Math.random() - 0.5) * JITTER))
       const sortedOthers = [...others].sort((a, b) => ((skillMap[b] || 0) + (Math.random() - 0.5) * JITTER) - ((skillMap[a] || 0) + (Math.random() - 0.5) * JITTER))
@@ -152,7 +223,8 @@ function genderAwareRound(
         const f = femalesLeft.shift() as string
         const m = othersLeft.shift() as string
         const key = pairKey(f, m)
-        if (localUsed.has(key)) { ok = false; break }
+        const freq = partnerFreq[key] || 0
+        if (localUsed.has(key) || freq > overrideThreshold) { ok = false; break }
         localUsed.add(key)
         pairs.push([f, m])
       }
@@ -163,7 +235,8 @@ function genderAwareRound(
       for (let i = 0; i < leftover.length; i += 2) {
         const a = leftover[i], b = leftover[i + 1]
         const key = pairKey(a, b)
-        if (localUsed.has(key)) { ok = false; break }
+        const freq = partnerFreq[key] || 0
+        if (localUsed.has(key) || freq > overrideThreshold) { ok = false; break }
         localUsed.add(key)
         pairs.push([a, b])
       }
@@ -172,14 +245,15 @@ function genderAwareRound(
   }
 
   // 성별 우선 매칭이 불가능하면 스킬 밸런스 기반 일반 매칭으로 진행
-  return balancedRoundAttempt(playing, skillMap, usedPairs)
+  return balancedRoundAttempt(playing, skillMap, partnerFreq, usedPairs)
 }
 
 function generateRoundsFlexible(
   players: string[],
   desiredGames: number,
   genderMap: Record<string, 'M' | 'F' | null>,
-  skillMap: Record<string, number>
+  skillMap: Record<string, number>,
+  partnerFreq: Record<string, number>
 ): { rounds: [string, string][][]; gamesPlayed: Record<string, number> } {
   const usedPairs = new Set<string>()
   const gamesPlayed: Record<string, number> = {}
@@ -196,7 +270,7 @@ function generateRoundsFlexible(
       byePlayers = sorted.slice(0, byeCount)
     }
     const playing = players.filter(p => !byePlayers.includes(p))
-    const round = genderAwareRound(playing, genderMap, skillMap, usedPairs)
+    const round = genderAwareRound(playing, genderMap, skillMap, partnerFreq, usedPairs)
     if (!round) {
       stagnant++
       if (stagnant > 30) break
@@ -308,7 +382,7 @@ function GamesPageInner() {
   const [sessionTitle, setSessionTitle] = useState('')
   const [titleTouched, setTitleTouched] = useState(false)
   const [confirmMsg, setConfirmMsg] = useState<string | null>(null)
-  const [pendingGeneration, setPendingGeneration] = useState<{ rounds: [string, string][][]; actualGames: number; skillMap: Record<string, number> } | null>(null)
+  const [pendingGeneration, setPendingGeneration] = useState<{ rounds: [string, string][][]; actualGames: number; skillMap: Record<string, number>; oppFreq: Record<string, number> } | null>(null)
 
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [sessionTab, setSessionTab] = useState<'info' | 'results' | 'ranking'>('results')
@@ -361,21 +435,22 @@ function GamesPageInner() {
     const genderMap: Record<string, 'M' | 'F' | null> = {}
     members.forEach(m => { genderMap[m.name] = m.gender })
     const skillMap = computeQuarterSkillMap(sessions, allMatches, players)
+    const { partnerFreq, oppFreq } = computeQuarterFrequencies(sessions, allMatches)
 
     const desired = Number(gamesPerPlayer) || 1
-    const { rounds, gamesPlayed } = generateRoundsFlexible(players, desired, genderMap, skillMap)
+    const { rounds, gamesPlayed } = generateRoundsFlexible(players, desired, genderMap, skillMap, partnerFreq)
     const minGames = Math.min(...Object.values(gamesPlayed))
 
     if (minGames < desired) {
       const byeNote = players.length % 4 !== 0 ? ' (인원이 4명 단위가 아니라 라운드마다 일부는 돌아가며 쉬어요)' : ''
       setConfirmMsg(`선택하신 인원으로는 1인당 ${desired}경기를 정확히 만들기 어려워요. 최소 ${minGames}경기씩은 보장돼요${byeNote}. 이대로 진행할까요?`)
-      setPendingGeneration({ rounds, actualGames: minGames, skillMap })
+      setPendingGeneration({ rounds, actualGames: minGames, skillMap, oppFreq })
     } else {
-      createSession(rounds, desired, skillMap)
+      createSession(rounds, desired, skillMap, oppFreq)
     }
   }
 
-  async function createSession(rounds: [string, string][][], actualGames: number, skillMap: Record<string, number>) {
+  async function createSession(rounds: [string, string][][], actualGames: number, skillMap: Record<string, number>, oppFreq: Record<string, number>) {
     const today = new Date()
     const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
     const title = sessionTitle.trim() || `${dateStr} 대회 ${groupLabel}`
@@ -390,7 +465,7 @@ function GamesPageInner() {
 
     const matchRows: any[] = []
     rounds.forEach((round, roundIdx) => {
-      const balancedPairs = groupPairsIntoBalancedMatches(round, skillMap)
+      const balancedPairs = groupPairsIntoBalancedMatches(round, skillMap, oppFreq)
       for (let i = 0; i + 1 < balancedPairs.length; i += 2) {
         matchRows.push({
           session_id: session.id,
@@ -498,6 +573,7 @@ function GamesPageInner() {
           <li>여성 인원이 4명 단위면 여자 복식을 우선 구성하고, 2명 이상이면 혼합 복식이 되도록 우선 배정해요 (파트너 중복을 피할 수 없으면 일반 매칭으로 진행돼요).</li>
           <li>참가 인원이 4명 단위가 아니면, 매 라운드마다 그때까지 가장 많이 뛴 사람이 우선 한 라운드 쉬어요.</li>
           <li>이번 분기 승점을 기준으로, 강한 선수와 약한 선수를 파트너로 묶고 양 팀 실력 합이 비슷하도록 자동 배정해요 (기록 없는 선수는 평균값으로 처리해요).</li>
+          <li>단, 실력 차이가 크면 같은 조합이 계속 반복될 수 있어서, 이번 분기 평균보다 특정 파트너·상대와 압도적으로 많이 만난 조합이면 우선순위를 깨고 다른 조합으로 바꿔요.</li>
         </ul>
       </div>
 
@@ -554,7 +630,7 @@ function GamesPageInner() {
                 <p style={{ fontSize: 14, lineHeight: 1.6 }}>{confirmMsg}</p>
                 <div className="modal-actions">
                   <button className="btn" onClick={() => { setConfirmMsg(null); setPendingGeneration(null) }}>취소</button>
-                  <button className="btn primary" onClick={() => createSession(pendingGeneration.rounds, pendingGeneration.actualGames, pendingGeneration.skillMap)}>진행합니다</button>
+                  <button className="btn primary" onClick={() => createSession(pendingGeneration.rounds, pendingGeneration.actualGames, pendingGeneration.skillMap, pendingGeneration.oppFreq)}>진행합니다</button>
                 </div>
               </div>
             </div>
