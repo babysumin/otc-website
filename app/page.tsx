@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, Member } from '@/lib/supabase'
 
-const FEE_PER_QUARTER = 50000
+const FEE_PER_QUARTER = 30
 const CURRENT_QUARTER: 'q1_paid' | 'q2_paid' | 'q3_paid' | 'q4_paid' = 'q3_paid'
 const QUARTERS: Array<'q1_paid' | 'q2_paid' | 'q3_paid' | 'q4_paid'> = ['q1_paid', 'q2_paid', 'q3_paid', 'q4_paid']
 
@@ -107,7 +107,7 @@ export default function Home() {
         <div className="stat"><div className="label">전체 회원</div><div className="value">{total}명</div></div>
         <div className="stat"><div className="label">이번 분기 납부 완료</div><div className="value">{paidCount}명</div></div>
         <div className="stat"><div className="label">이번 분기 미납</div><div className="value warn">{unpaidCount}명</div></div>
-        <div className="stat"><div className="label">미납 회비 (추정)</div><div className="value warn">{(unpaidCount * FEE_PER_QUARTER).toLocaleString('ko-KR')}원</div></div>
+        <div className="stat"><div className="label">미납 회비 (추정)</div><div className="value warn">${(unpaidCount * FEE_PER_QUARTER).toLocaleString('en-US')}</div></div>
       </div>
 
       <div className="toolbar">
