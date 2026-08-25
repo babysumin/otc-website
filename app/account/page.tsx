@@ -14,6 +14,7 @@ export default function AccountPage() {
   const [txns, setTxns] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Transaction | null>(null)
   const [form, setForm] = useState({ date: '', person: '', contents: '', income: '', expense: '', note: '' })
@@ -100,13 +101,17 @@ export default function AccountPage() {
 
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase()
-    if (!s) return txns
-    return txns.filter(t =>
+    const base = !s ? txns : txns.filter(t =>
       t.contents.toLowerCase().includes(s) ||
       (t.person || '').toLowerCase().includes(s) ||
       (t.note || '').toLowerCase().includes(s)
     )
-  }, [txns, search])
+    return [...base].sort((a, b) => {
+      const da = a.date || ''
+      const db = b.date || ''
+      return sortOrder === 'desc' ? db.localeCompare(da) : da.localeCompare(db)
+    })
+  }, [txns, search, sortOrder])
 
   const totalIncome = txns.reduce((sum, t) => sum + (t.income || 0), 0)
   const totalExpense = txns.reduce((sum, t) => sum + (t.expense || 0), 0)
@@ -158,6 +163,10 @@ export default function AccountPage() {
         <div className="search">
           <input placeholder="내용, 담당자, 메모 검색" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        <select value={sortOrder} onChange={e => setSortOrder(e.target.value as 'desc' | 'asc')}>
+          <option value="desc">최근 기록부터</option>
+          <option value="asc">예전 기록부터</option>
+        </select>
       </div>
 
       <div className="table-wrap">
