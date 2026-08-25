@@ -28,6 +28,9 @@ const MONTHS: Array<{ key: keyof LedgerRow; label: string }> = [
 
 export default function MembershipLedgerPage() {
   const { isAdmin } = useAuth()
+  const [unlocked, setUnlocked] = useState(false)
+  const [pwInput, setPwInput] = useState('')
+  const [pwErr, setPwErr] = useState(false)
   const [rows, setRows] = useState<LedgerRow[]>([])
   const [memberMap, setMemberMap] = useState<Record<string, MemberInfo>>({})
   const [loading, setLoading] = useState(true)
@@ -35,9 +38,27 @@ export default function MembershipLedgerPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'member' | 'guest' | 'alumni'>('all')
 
   useEffect(() => {
-    fetchRows()
-    fetchMemberInfo()
+    if (typeof window !== 'undefined' && sessionStorage.getItem('otc_account_unlocked') === '1') {
+      setUnlocked(true)
+    }
   }, [])
+
+  function checkPassword() {
+    if (pwInput === 'OTC') {
+      setUnlocked(true)
+      setPwErr(false)
+      sessionStorage.setItem('otc_account_unlocked', '1')
+    } else {
+      setPwErr(true)
+    }
+  }
+
+  useEffect(() => {
+    if (unlocked) {
+      fetchRows()
+      fetchMemberInfo()
+    }
+  }, [unlocked])
 
   async function fetchRows() {
     setLoading(true)
@@ -94,6 +115,31 @@ export default function MembershipLedgerPage() {
 
   const grandTotal = filtered.reduce((sum, r) => sum + rowTotal(r), 0)
 
+  if (!unlocked) {
+    return (
+      <div className="wrap">
+        <TopNav />
+        <div className="section-header">
+          <h2 className="section-title">멤버십 장부</h2>
+        </div>
+        <div className="password-gate">
+          <p>멤버십 장부는 비밀번호를 입력해야 볼 수 있어요.</p>
+          <div className="password-gate-row">
+            <input
+              type="password"
+              value={pwInput}
+              onChange={e => setPwInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') checkPassword() }}
+              placeholder="비밀번호"
+            />
+            <button className="btn primary" onClick={checkPassword}>확인</button>
+          </div>
+          {pwErr && <div className="err">비밀번호가 올바르지 않아요</div>}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="wrap">
       <TopNav />
@@ -123,9 +169,15 @@ export default function MembershipLedgerPage() {
         <table>
           <thead>
             <tr>
-              <th>이름</th><th>성별</th><th>상태</th>
-              {MONTHS.map(m => <th key={m.key}>{m.label}</th>)}
-              <th>합계</th>
+              <th rowSpan={2}>이름</th><th rowSpan={2}>성별</th><th rowSpan={2}>상태</th>
+              <th colSpan={3} className="quarter-head">1분기</th>
+              <th colSpan={3} className="quarter-head">2분기</th>
+              <th colSpan={3} className="quarter-head">3분기</th>
+              <th colSpan={3} className="quarter-head">4분기</th>
+              <th rowSpan={2}>합계</th>
+            </tr>
+            <tr>
+              {MONTHS.map(m => <th key={m.key} className="month-subhead">{m.label}</th>)}
             </tr>
           </thead>
           <tbody>

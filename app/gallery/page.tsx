@@ -11,10 +11,12 @@ type MediaItem = {
   url: string
   isVideo: boolean
   quarter: string
+  event: string
 }
 
 const VIDEO_EXT = ['mp4', 'mov', 'webm', 'm4v']
-const UNSPECIFIED = '미지정'
+const UNSPECIFIED_Q = '미지정'
+const UNSPECIFIED_EVENT = '기타'
 
 export default function GalleryPage() {
   const { isAdmin } = useAuth()
@@ -24,6 +26,7 @@ export default function GalleryPage() {
   const [preview, setPreview] = useState<MediaItem | null>(null)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [uploadQuarter, setUploadQuarter] = useState('26Q3')
+  const [uploadEvent, setUploadEvent] = useState('')
   const [pendingFiles, setPendingFiles] = useState<FileList | null>(null)
 
   useEffect(() => {
@@ -40,7 +43,14 @@ export default function GalleryPage() {
     if (!error && data) {
       const list: MediaItem[] = data.map((row: any) => {
         const { data: pub } = supabase.storage.from('gallery-media').getPublicUrl(row.path)
-        return { id: row.id, path: row.path, url: pub.publicUrl, isVideo: row.is_video, quarter: row.quarter || UNSPECIFIED }
+        return {
+          id: row.id,
+          path: row.path,
+          url: pub.publicUrl,
+          isVideo: row.is_video,
+          quarter: row.quarter || UNSPECIFIED_Q,
+          event: row.event_name || UNSPECIFIED_EVENT,
+        }
       })
       setItems(list)
     }
@@ -61,12 +71,18 @@ export default function GalleryPage() {
       const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
       const { error } = await supabase.storage.from('gallery-media').upload(path, file)
       if (!error) {
-        await supabase.from('gallery_items').insert({ path, quarter: uploadQuarter || null, is_video: isVideo })
+        await supabase.from('gallery_items').insert({
+          path,
+          quarter: uploadQuarter || null,
+          event_name: uploadEvent || null,
+          is_video: isVideo,
+        })
       }
     }
     setUploading(false)
     setUploadOpen(false)
     setPendingFiles(null)
+    setUploadEvent('')
     fetchItems()
   }
 
@@ -79,13 +95,17 @@ export default function GalleryPage() {
   }
 
   const grouped = useMemo(() => {
-    const map = new Map<string, MediaItem[]>()
+    const quarterMap = new Map<string, Map<string, MediaItem[]>>()
     for (const item of items) {
-      const key = item.quarter
-      if (!map.has(key)) map.set(key, [])
-      map.get(key)!.push(item)
+      if (!quarterMap.has(item.quarter)) quarterMap.set(item.quarter, new Map())
+      const eventMap = quarterMap.get(item.quarter)!
+      if (!eventMap.has(item.event)) eventMap.set(item.event, [])
+      eventMap.get(item.event)!.push(item)
     }
-    return Array.from(map.entries())
+    return Array.from(quarterMap.entries()).map(([quarter, eventMap]) => ({
+      quarter,
+      events: Array.from(eventMap.entries()),
+    }))
   }, [items])
 
   return (
@@ -111,29 +131,34 @@ export default function GalleryPage() {
 
       {!loading && items.length === 0 && <div className="empty">아직 올라온 사진/동영상이 없어요.</div>}
 
-      {grouped.map(([quarter, groupItems]) => (
-        <div key={quarter} className="gallery-group">
-          <h3 className="gallery-group-title">{quarter}</h3>
-          <div className="gallery-grid">
-            {groupItems.map(item => (
-              <div key={item.id} className="gallery-item" onClick={() => setPreview(item)}>
-                {item.isVideo ? (
-                  <video src={item.url} className="gallery-thumb" muted />
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.url} alt="" className="gallery-thumb" />
-                )}
-                {item.isVideo && <span className="gallery-video-badge">▶</span>}
+      {grouped.map(({ quarter, events }) => (
+        <div key={quarter} className="gallery-quarter-group">
+          <h3 className="gallery-quarter-title">{quarter}</h3>
+          {events.map(([eventName, eventItems]) => (
+            <div key={eventName} className="gallery-event-group">
+              <h4 className="gallery-event-title">{eventName}</h4>
+              <div className="gallery-grid">
+                {eventItems.map(item => (
+                  <div key={item.id} className="gallery-item" onClick={() => setPreview(item)}>
+                    {item.isVideo ? (
+                      <video src={item.url} className="gallery-thumb" muted />
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={item.url} alt="" className="gallery-thumb" />
+                    )}
+                    {item.isVideo && <span className="gallery-video-badge">▶</span>}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
       ))}
 
       {uploadOpen && (
         <div className="modal-overlay show" onClick={e => { if (e.target === e.currentTarget && !uploading) setUploadOpen(false) }}>
           <div className="modal">
-            <h2>업로드할 시기 선택</h2>
+            <h2>업로드 정보 입력</h2>
             <div className="field">
               <label>분기</label>
               <input
@@ -142,7 +167,15 @@ export default function GalleryPage() {
                 placeholder="예: 26Q3"
               />
             </div>
-            <p className="upload-hint">이 시기 기준으로 사진이 묶여서 보여요. ({pendingFiles?.length || 0}개 파일)</p>
+            <div className="field">
+              <label>이벤트명</label>
+              <input
+                value={uploadEvent}
+                onChange={e => setUploadEvent(e.target.value)}
+                placeholder="예: 친선경기, 바베큐 이벤트"
+              />
+            </div>
+            <p className="upload-hint">분기 아래에 이벤트별로 사진이 묶여서 보여요. ({pendingFiles?.length || 0}개 파일)</p>
             <div className="modal-actions">
               <button className="btn" disabled={uploading} onClick={() => setUploadOpen(false)}>취소</button>
               <button className="btn primary" disabled={uploading} onClick={confirmUpload}>

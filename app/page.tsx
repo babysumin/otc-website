@@ -6,9 +6,6 @@ import { useAuth } from '@/lib/useAuth'
 import TopNav from '@/components/TopNav'
 import GenderIcon from '@/components/GenderIcon'
 
-const FEE_PER_QUARTER = 30
-const CURRENT_QUARTER: 'q1_paid' | 'q2_paid' | 'q3_paid' | 'q4_paid' = 'q3_paid'
-const QUARTERS: Array<'q1_paid' | 'q2_paid' | 'q3_paid' | 'q4_paid'> = ['q1_paid', 'q2_paid', 'q3_paid', 'q4_paid']
 const STATUS_TABS: Array<{ key: 'all' | MemberStatus; label: string }> = [
   { key: 'all', label: '전체' },
   { key: 'member', label: '정회원' },
@@ -17,22 +14,15 @@ const STATUS_TABS: Array<{ key: 'all' | MemberStatus; label: string }> = [
 ]
 const STATUS_ORDER: Record<MemberStatus, number> = { member: 0, guest: 1, alumni: 2 }
 
-function parseJoinQuarter(joinDate: string | null): number | null {
-  if (!joinDate) return null
-  const match = joinDate.match(/Q([1-4])/)
-  return match ? Number(match[1]) : null
-}
-
 export default function Home() {
   const { isAdmin } = useAuth()
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [feeFilter, setFeeFilter] = useState<'all' | 'unpaid'>('all')
   const [statusTab, setStatusTab] = useState<'all' | MemberStatus>('all')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Member | null>(null)
-  const [form, setForm] = useState({ name: '', phone: '', join_date: '', memo: '', status: 'member' as MemberStatus, gender: '' as 'M' | 'F' | '' })
+  const [form, setForm] = useState({ name: '', join_date: '', memo: '', status: 'member' as MemberStatus, gender: '' as 'M' | 'F' | '' })
   const [nameErr, setNameErr] = useState(false)
 
   const [intro, setIntro] = useState('')
@@ -81,12 +71,6 @@ export default function Home() {
     setLoading(false)
   }
 
-  async function setFee(m: Member, q: typeof QUARTERS[number], value: 'paid' | 'unpaid' | '') {
-    const next = value === '' ? null : value
-    setMembers(prev => prev.map(x => (x.id === m.id ? { ...x, [q]: next } : x)))
-    await supabase.from('members').update({ [q]: next }).eq('id', m.id)
-  }
-
   async function changeStatus(m: Member, status: MemberStatus) {
     setMembers(prev => prev.map(x => (x.id === m.id ? { ...x, status } : x)))
     await supabase.from('members').update({ status }).eq('id', m.id)
@@ -100,14 +84,14 @@ export default function Home() {
 
   function openAdd() {
     setEditing(null)
-    setForm({ name: '', phone: '', join_date: '', memo: '', status: 'member', gender: '' })
+    setForm({ name: '', join_date: '', memo: '', status: 'member', gender: '' })
     setNameErr(false)
     setModalOpen(true)
   }
 
   function openEdit(m: Member) {
     setEditing(m)
-    setForm({ name: m.name, phone: m.phone || '', join_date: m.join_date || '', memo: m.memo || '', status: m.status, gender: m.gender || '' })
+    setForm({ name: m.name, join_date: m.join_date || '', memo: m.memo || '', status: m.status, gender: m.gender || '' })
     setNameErr(false)
     setModalOpen(true)
   }
@@ -120,13 +104,12 @@ export default function Home() {
     if (editing) {
       const { error } = await supabase
         .from('members')
-        .update({ name: form.name, phone: form.phone, join_date: form.join_date, memo: form.memo, status: form.status, gender: form.gender || null })
+        .update({ name: form.name, join_date: form.join_date, memo: form.memo, status: form.status, gender: form.gender || null })
         .eq('id', editing.id)
       if (!error) fetchMembers()
     } else {
       const { error } = await supabase.from('members').insert({
         name: form.name,
-        phone: form.phone,
         join_date: form.join_date,
         memo: form.memo,
         status: form.status,
@@ -149,10 +132,9 @@ export default function Home() {
     return members
       .filter(m => {
         const s = search.trim().toLowerCase()
-        const matchesSearch = !s || m.name.toLowerCase().includes(s) || (m.phone || '').includes(s)
-        const matchesFee = feeFilter === 'all' || !m[CURRENT_QUARTER]
+        const matchesSearch = !s || m.name.toLowerCase().includes(s)
         const matchesStatus = statusTab === 'all' || m.status === statusTab
-        return matchesSearch && matchesFee && matchesStatus
+        return matchesSearch && matchesStatus
       })
       .sort((a, b) => {
         const statusDiff = STATUS_ORDER[a.status] - STATUS_ORDER[b.status]
@@ -160,23 +142,14 @@ export default function Home() {
         if (a.is_officer !== b.is_officer) return a.is_officer ? -1 : 1
         return a.name.localeCompare(b.name, 'ko')
       })
-  }, [members, search, feeFilter, statusTab])
-
-  const scoped = useMemo(() => {
-    return statusTab === 'all' ? members : members.filter(m => m.status === statusTab)
-  }, [members, statusTab])
-
-  const feeScoped = statusTab === 'all' ? members.filter(m => m.status === 'member') : scoped
-  const total = statusTab === 'all' ? members.filter(m => m.status === 'member').length : scoped.length
-  const paidCount = feeScoped.filter(m => m[CURRENT_QUARTER] === 'paid').length
-  const unpaidCount = statusTab === 'guest' || statusTab === 'alumni' ? 0 : feeScoped.filter(m => m[CURRENT_QUARTER] === 'unpaid').length
+  }, [members, search, statusTab])
 
   return (
     <div className="wrap">
       <TopNav />
 
       <div className="section-header">
-        <h2 className="section-title">회원 명단</h2>
+        <h2 className="section-title">회원</h2>
         {isAdmin && <button className="btn primary" onClick={openAdd}>+ 회원 추가</button>}
       </div>
 
@@ -234,29 +207,17 @@ export default function Home() {
         ))}
       </div>
 
-      <div className="stats">
-        <div className="stat"><div className="label">{statusTab === 'all' ? '전체 회원' : STATUS_TABS.find(t => t.key === statusTab)?.label}</div><div className="value">{total}명</div></div>
-        <div className="stat"><div className="label">이번 분기 납부 완료</div><div className="value">{paidCount}명</div></div>
-        <div className="stat"><div className="label">이번 분기 미납</div><div className="value warn">{unpaidCount}명</div></div>
-        <div className="stat"><div className="label">미납 회비 (추정)</div><div className="value warn">${(unpaidCount * FEE_PER_QUARTER).toLocaleString('en-US')}</div></div>
-      </div>
-
       <div className="toolbar">
         <div className="search">
-          <input placeholder="이름 또는 연락처 검색" value={search} onChange={e => setSearch(e.target.value)} />
+          <input placeholder="이름 검색" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <select value={feeFilter} onChange={e => setFeeFilter(e.target.value as 'all' | 'unpaid')}>
-          <option value="all">전체 보기</option>
-          <option value="unpaid">이번 분기 미납만</option>
-        </select>
       </div>
 
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>이름</th><th>성별</th><th>상태</th><th>연락처</th><th>가입 시기</th>
-              <th>1분기</th><th>2분기</th><th>3분기</th><th>4분기</th>
+              <th>이름</th><th>성별</th><th>상태</th><th>가입 시기</th>
               <th>메모</th><th></th>
             </tr>
           </thead>
@@ -289,33 +250,7 @@ export default function Home() {
                     <span className={`status-badge status-${m.status}`}>{STATUS_LABEL[m.status]}</span>
                   )}
                 </td>
-                <td className="phone-cell">{m.phone || '-'}</td>
                 <td>{m.join_date || '-'}</td>
-                {QUARTERS.map((q) => {
-                  const isApplicable = m.status === 'member'
-                  const value = m[q]
-                  if (!isApplicable) {
-                    return <td key={q}><span className="qpill empty readonly">-</span></td>
-                  }
-                  if (!isAdmin) {
-                    const label = value === 'paid' ? '완납' : value === 'unpaid' ? '미납' : '-'
-                    const cls = value === 'paid' ? 'paid' : value === 'unpaid' ? 'unpaid' : 'empty'
-                    return <td key={q}><span className={`qpill ${cls} readonly`}>{label}</span></td>
-                  }
-                  return (
-                    <td key={q}>
-                      <select
-                        className={`fee-select fee-${value || 'empty'}`}
-                        value={value || ''}
-                        onChange={e => setFee(m, q, e.target.value as 'paid' | 'unpaid' | '')}
-                      >
-                        <option value="">-</option>
-                        <option value="unpaid">미납</option>
-                        <option value="paid">완납</option>
-                      </select>
-                    </td>
-                  )
-                })}
                 <td className="memo-cell" title={m.memo || ''}>{m.memo || '-'}</td>
                 <td>{isAdmin && <button className="icon-btn" onClick={() => openEdit(m)}>⋯</button>}</td>
               </tr>
@@ -349,10 +284,6 @@ export default function Home() {
                 <option value="M">남</option>
                 <option value="F">여</option>
               </select>
-            </div>
-            <div className="field">
-              <label>연락처</label>
-              <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="010-1234-5678" />
             </div>
             <div className="field">
               <label>가입 시기</label>
