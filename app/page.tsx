@@ -32,10 +32,40 @@ export default function Home() {
   const [uploading, setUploading] = useState(false)
   const [logoError, setLogoError] = useState(false)
 
+  const [session, setSession] = useState<any>(null)
+  const [loginOpen, setLoginOpen] = useState(false)
+  const [loginEmail, setLoginEmail] = useState('')
+  const [loginPassword, setLoginPassword] = useState('')
+  const [loginErr, setLoginErr] = useState('')
+  const isAdmin = !!session
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session))
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, s) => setSession(s))
+    return () => listener.subscription.unsubscribe()
+  }, [])
+
   useEffect(() => {
     fetchMembers()
     fetchIntro()
   }, [])
+
+  async function handleLogin() {
+    setLoginErr('')
+    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword })
+    if (error) {
+      setLoginErr('이메일 또는 비밀번호가 올바르지 않아요')
+      return
+    }
+    setLoginOpen(false)
+    setLoginEmail('')
+    setLoginPassword('')
+  }
+
+  async function handleLogout() {
+    await supabase.auth.signOut()
+  }
+
 
   async function fetchIntro() {
     const { data } = await supabase.from('club_info').select('intro, photo_url').eq('id', 1).single()
@@ -80,6 +110,12 @@ export default function Home() {
   async function changeStatus(m: Member, status: MemberStatus) {
     setMembers(prev => prev.map(x => (x.id === m.id ? { ...x, status } : x)))
     await supabase.from('members').update({ status }).eq('id', m.id)
+  }
+
+  async function toggleOfficer(m: Member) {
+    const updated = { ...m, is_officer: !m.is_officer }
+    setMembers(prev => prev.map(x => (x.id === m.id ? updated : x)))
+    await supabase.from('members').update({ is_officer: updated.is_officer }).eq('id', m.id)
   }
 
   function openAdd() {
@@ -128,14 +164,23 @@ export default function Home() {
     fetchMembers()
   }
 
+  const STATUS_ORDER: Record<MemberStatus, number> = { member: 0, guest: 1, alumni: 2 }
+
   const filtered = useMemo(() => {
-    return members.filter(m => {
-      const s = search.trim().toLowerCase()
-      const matchesSearch = !s || m.name.toLowerCase().includes(s) || (m.phone || '').includes(s)
-      const matchesFee = feeFilter === 'all' || !m[CURRENT_QUARTER]
-      const matchesStatus = statusTab === 'all' || m.status === statusTab
-      return matchesSearch && matchesFee && matchesStatus
-    })
+    return members
+      .filter(m => {
+        const s = search.trim().toLowerCase()
+        const matchesSearch = !s || m.name.toLowerCase().includes(s) || (m.phone || '').includes(s)
+        const matchesFee = feeFilter === 'all' || !m[CURRENT_QUARTER]
+        const matchesStatus = statusTab === 'all' || m.status === statusTab
+        return matchesSearch && matchesFee && matchesStatus
+      })
+      .sort((a, b) => {
+        const statusDiff = STATUS_ORDER[a.status] - STATUS_ORDER[b.status]
+        if (statusDiff !== 0) return statusDiff
+        if (a.is_officer !== b.is_officer) return a.is_officer ? -1 : 1
+        return a.name.localeCompare(b.name, 'ko')
+      })
   }, [members, search, feeFilter, statusTab])
 
   // 상단 통계는 현재 선택된 상태 탭 기준으로 자동 계산됨
@@ -164,7 +209,16 @@ export default function Home() {
             <p>회원 명단 · 2026년 회비 관리</p>
           </div>
         </div>
-        <button className="btn primary" onClick={openAdd}>+ 회원 추가</button>
+        <div className="header-actions">
+          {isAdmin ? (
+            <>
+              <button className="btn primary" onClick={openAdd}>+ 회원 추가</button>
+              <button className="btn" onClick={handleLogout}>로그아웃</button>
+            </>
+          ) : (
+            <button className="btn" onClick={() => setLoginOpen(true)}>관리자 로그인</button>
+          )}
+        </div>
       </div>
 
       <div className="intro-box">
@@ -196,12 +250,12 @@ export default function Home() {
             </div>
           </>
         ) : (
-          <div className="intro-view" onClick={() => { setIntroDraft(intro); setPhotoDraft(photoUrl); setIntroEditing(true) }}>
+          <div className={`intro-view ${isAdmin ? '' : 'no-edit'}`} onClick={() => { if (isAdmin) { setIntroDraft(intro); setPhotoDraft(photoUrl); setIntroEditing(true) } }}>
             {photoUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={photoUrl} alt="소개 사진" className="intro-photo" />
             )}
-            {intro ? <p>{intro}</p> : <p className="intro-placeholder">클릭해서 클럽 소개글과 사진을 추가해보세요</p>}
+            {intro ? <p>{intro}</p> : isAdmin ? <p className="intro-placeholder">클릭해서 클럽 소개글과 사진을 추가해보세요</p> : null}
           </div>
         )}
       </div>
@@ -250,35 +304,72 @@ export default function Home() {
           <tbody>
             {filtered.map(m => (
               <tr key={m.id}>
-                <td className="name-cell">{m.name}</td>
+                <td className="name-cell">
+                  {isAdmin && (
+                    <span className="officer-star" onClick={() => toggleOfficer(m)} title="운영진 표시/해제">
+                      {m.is_officer ? '★' : '☆'}
+                    </span>
+                  )}
+                  {!isAdmin && m.is_officer && <span className="officer-star readonly">★</span>}
+                  {m.name}
+                  {m.is_officer && <span className="officer-badge">운영진</span>}
+                </td>
                 <td>
-                  <select
-                    className={`status-select status-${m.status}`}
-                    value={m.status}
-                    onChange={e => changeStatus(m, e.target.value as MemberStatus)}
-                  >
-                    <option value="member">정회원</option>
-                    <option value="guest">게스트</option>
-                    <option value="alumni">동문</option>
-                  </select>
+                  {isAdmin ? (
+                    <select
+                      className={`status-select status-${m.status}`}
+                      value={m.status}
+                      onChange={e => changeStatus(m, e.target.value as MemberStatus)}
+                    >
+                      <option value="member">정회원</option>
+                      <option value="guest">게스트</option>
+                      <option value="alumni">동문</option>
+                    </select>
+                  ) : (
+                    <span className={`status-badge status-${m.status}`}>{STATUS_LABEL[m.status]}</span>
+                  )}
                 </td>
                 <td className="phone-cell">{m.phone || '-'}</td>
                 <td>{m.join_date || '-'}</td>
                 {QUARTERS.map(q => (
                   <td key={q}>
-                    <span className={`qpill ${m[q] ? 'paid' : 'unpaid'}`} onClick={() => toggleFee(m, q)}>
+                    <span
+                      className={`qpill ${m[q] ? 'paid' : 'unpaid'} ${isAdmin ? '' : 'readonly'}`}
+                      onClick={() => { if (isAdmin) toggleFee(m, q) }}
+                    >
                       {m[q] ? '완납' : '미납'}
                     </span>
                   </td>
                 ))}
                 <td className="memo-cell" title={m.memo || ''}>{m.memo || '-'}</td>
-                <td><button className="icon-btn" onClick={() => openEdit(m)}>⋯</button></td>
+                <td>{isAdmin && <button className="icon-btn" onClick={() => openEdit(m)}>⋯</button>}</td>
               </tr>
             ))}
           </tbody>
         </table>
         {!loading && filtered.length === 0 && <div className="empty">해당하는 회원이 없어요.</div>}
       </div>
+
+      {loginOpen && (
+        <div className="modal-overlay show" onClick={e => { if (e.target === e.currentTarget) setLoginOpen(false) }}>
+          <div className="modal">
+            <h2>관리자 로그인</h2>
+            <div className="field">
+              <label>이메일</label>
+              <input type="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="you@example.com" />
+            </div>
+            <div className="field">
+              <label>비밀번호</label>
+              <input type="password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleLogin() }} />
+              {loginErr && <div className="err">{loginErr}</div>}
+            </div>
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setLoginOpen(false)}>취소</button>
+              <button className="btn primary" onClick={handleLogin}>로그인</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {modalOpen && (
         <div className="modal-overlay show" onClick={e => { if (e.target === e.currentTarget) setModalOpen(false) }}>

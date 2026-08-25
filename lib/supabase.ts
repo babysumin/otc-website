@@ -14,6 +14,7 @@ export type Member = {
   join_date: string | null
   memo: string | null
   status: MemberStatus
+  is_officer: boolean
   q1_paid: boolean
   q2_paid: boolean
   q3_paid: boolean
