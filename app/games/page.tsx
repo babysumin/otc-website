@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { supabase, Member } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
+import { useMemberAuth } from '@/lib/useMemberAuth'
 import TopNav from '@/components/TopNav'
+import MemberGate from '@/components/MemberGate'
 
 type MatchRow = {
   id: string
@@ -388,6 +390,7 @@ function computeQuarterSkillMap(sessions: SessionRow[], allMatches: MatchRow[], 
 
 function GamesPageInner() {
   const { isAdmin } = useAuth()
+  const { isMember, pwInput, setPwInput, pwErr, checkPassword } = useMemberAuth()
   const searchParams = useSearchParams()
   const [tab, setTab] = useState<'create' | 'sessions' | 'ranking'>('sessions')
   const [members, setMembers] = useState<Member[]>([])
@@ -622,6 +625,18 @@ function GamesPageInner() {
     }
     return Object.entries(counts).sort((a, b) => b[1].games - a[1].games)
   }, [selectedPlayer, playerMatches])
+
+  if (!isMember) {
+    return (
+      <div className="wrap">
+        <TopNav />
+        <div className="section-header">
+          <h2 className="section-title">경기 (KDK 복식)</h2>
+        </div>
+        <MemberGate title="경기" pwInput={pwInput} setPwInput={setPwInput} pwErr={pwErr} checkPassword={checkPassword} />
+      </div>
+    )
+  }
 
   return (
     <div className="wrap">

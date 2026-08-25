@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { supabase, Member, MemberStatus, STATUS_LABEL } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
+import { useMemberAuth } from '@/lib/useMemberAuth'
 import TopNav from '@/components/TopNav'
+import MemberGate from '@/components/MemberGate'
 import GenderIcon from '@/components/GenderIcon'
 
 const STATUS_TABS: Array<{ key: 'all' | MemberStatus; label: string }> = [
@@ -22,6 +24,7 @@ const QUARTER_MONTHS: string[][] = [
 
 function MembersPageInner() {
   const { isAdmin } = useAuth()
+  const { isMember, pwInput, setPwInput, pwErr, checkPassword } = useMemberAuth()
   const searchParams = useSearchParams()
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
@@ -134,6 +137,18 @@ function MembersPageInner() {
         return a.name.localeCompare(b.name, 'ko')
       })
   }, [members, search, statusTab])
+
+  if (!isMember) {
+    return (
+      <div className="wrap">
+        <TopNav />
+        <div className="section-header">
+          <h2 className="section-title">회원</h2>
+        </div>
+        <MemberGate title="회원 명단" pwInput={pwInput} setPwInput={setPwInput} pwErr={pwErr} checkPassword={checkPassword} />
+      </div>
+    )
+  }
 
   return (
     <div className="wrap">

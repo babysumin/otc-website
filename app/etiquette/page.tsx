@@ -3,10 +3,13 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
+import { useMemberAuth } from '@/lib/useMemberAuth'
 import TopNav from '@/components/TopNav'
+import MemberGate from '@/components/MemberGate'
 
 export default function EtiquettePage() {
   const { isAdmin } = useAuth()
+  const { isMember, pwInput, setPwInput, pwErr, checkPassword } = useMemberAuth()
   const [content, setContent] = useState('')
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
@@ -46,6 +49,18 @@ export default function EtiquettePage() {
     if (!iso) return ''
     const d = new Date(iso)
     return d.toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+  }
+
+  if (!isMember) {
+    return (
+      <div className="wrap">
+        <TopNav />
+        <div className="section-header">
+          <h2 className="section-title">테니스 에티켓</h2>
+        </div>
+        <MemberGate title="테니스 에티켓" pwInput={pwInput} setPwInput={setPwInput} pwErr={pwErr} checkPassword={checkPassword} />
+      </div>
+    )
   }
 
   return (

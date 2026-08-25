@@ -32,11 +32,8 @@ const MONTHS: Array<{ key: keyof LedgerRow; label: string }> = [
 ]
 
 function MembershipLedgerPageInner() {
-  const { isAdmin } = useAuth()
+  const { isAdmin, setLoginOpen } = useAuth()
   const searchParams = useSearchParams()
-  const [unlocked, setUnlocked] = useState(false)
-  const [pwInput, setPwInput] = useState('')
-  const [pwErr, setPwErr] = useState(false)
   const [rows, setRows] = useState<LedgerRow[]>([])
   const [memberMap, setMemberMap] = useState<Record<string, MemberInfo>>({})
   const [loading, setLoading] = useState(true)
@@ -44,29 +41,16 @@ function MembershipLedgerPageInner() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'member' | 'guest' | 'alumni'>('all')
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && sessionStorage.getItem('otc_account_unlocked') === '1') {
-      setUnlocked(true)
-    }
     const q = searchParams.get('q')
     if (q) setSearch(q)
   }, [])
 
-  function checkPassword() {
-    if (pwInput === 'OTC') {
-      setUnlocked(true)
-      setPwErr(false)
-      sessionStorage.setItem('otc_account_unlocked', '1')
-    } else {
-      setPwErr(true)
-    }
-  }
-
   useEffect(() => {
-    if (unlocked) {
+    if (isAdmin) {
       fetchRows()
       fetchMemberInfo()
     }
-  }, [unlocked])
+  }, [isAdmin])
 
   async function fetchRows() {
     setLoading(true)
@@ -141,7 +125,7 @@ function MembershipLedgerPageInner() {
 
   const grandTotal = filtered.reduce((sum, r) => sum + rowTotal(r), 0)
 
-  if (!unlocked) {
+  if (!isAdmin) {
     return (
       <div className="wrap">
         <TopNav />
@@ -149,18 +133,10 @@ function MembershipLedgerPageInner() {
           <h2 className="section-title">멤버십 장부</h2>
         </div>
         <div className="password-gate">
-          <p>멤버십 장부는 비밀번호를 입력해야 볼 수 있어요.</p>
+          <p>멤버십 장부는 운영진만 볼 수 있어요.</p>
           <div className="password-gate-row">
-            <input
-              type="password"
-              value={pwInput}
-              onChange={e => setPwInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') checkPassword() }}
-              placeholder="비밀번호"
-            />
-            <button className="btn primary" onClick={checkPassword}>확인</button>
+            <button className="btn primary" onClick={() => setLoginOpen(true)}>운영진 로그인</button>
           </div>
-          {pwErr && <div className="err">비밀번호가 올바르지 않아요</div>}
         </div>
       </div>
     )

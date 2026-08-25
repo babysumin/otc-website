@@ -7,7 +7,7 @@ const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || ''
 
 export function useAuth() {
   const [session, setSession] = useState<any>(null)
-  const [loginOpen, setLoginOpen] = useState(false)
+  const [loginOpen, setLoginOpenState] = useState(false)
   const [loginPin, setLoginPin] = useState('')
   const [loginErr, setLoginErr] = useState('')
   const isAdmin = !!session
@@ -15,8 +15,21 @@ export function useAuth() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
     const { data: listener } = supabase.auth.onAuthStateChange((_event, s) => setSession(s))
-    return () => listener.subscription.unsubscribe()
+    const openHandler = () => setLoginOpenState(true)
+    window.addEventListener('otc:open-admin-login', openHandler)
+    return () => {
+      listener.subscription.unsubscribe()
+      window.removeEventListener('otc:open-admin-login', openHandler)
+    }
   }, [])
+
+  function setLoginOpen(open: boolean) {
+    if (open) {
+      window.dispatchEvent(new Event('otc:open-admin-login'))
+    } else {
+      setLoginOpenState(false)
+    }
+  }
 
   async function handleLogin() {
     setLoginErr('')
