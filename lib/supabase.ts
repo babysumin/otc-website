@@ -9,6 +9,8 @@ export type MemberStatus = 'member' | 'guest' | 'alumni'
 
 export type FeeStatus = 'paid' | 'unpaid' | null
 
+export type Gender = 'M' | 'F' | null
+
 export type Member = {
   id: string
   name: string
@@ -17,6 +19,7 @@ export type Member = {
   memo: string | null
   status: MemberStatus
   is_officer: boolean
+  gender: Gender
   q1_paid: FeeStatus
   q2_paid: FeeStatus
   q3_paid: FeeStatus

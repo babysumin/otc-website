@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase, Member, MemberStatus, STATUS_LABEL } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 import TopNav from '@/components/TopNav'
+import GenderIcon from '@/components/GenderIcon'
 
 const FEE_PER_QUARTER = 30
 const CURRENT_QUARTER: 'q1_paid' | 'q2_paid' | 'q3_paid' | 'q4_paid' = 'q3_paid'
@@ -31,7 +32,7 @@ export default function Home() {
   const [statusTab, setStatusTab] = useState<'all' | MemberStatus>('all')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Member | null>(null)
-  const [form, setForm] = useState({ name: '', phone: '', join_date: '', memo: '', status: 'member' as MemberStatus })
+  const [form, setForm] = useState({ name: '', phone: '', join_date: '', memo: '', status: 'member' as MemberStatus, gender: '' as 'M' | 'F' | '' })
   const [nameErr, setNameErr] = useState(false)
 
   const [intro, setIntro] = useState('')
@@ -97,16 +98,22 @@ export default function Home() {
     await supabase.from('members').update({ is_officer: updated.is_officer }).eq('id', m.id)
   }
 
+  async function setGender(m: Member, gender: 'M' | 'F' | '') {
+    const next = gender === '' ? null : gender
+    setMembers(prev => prev.map(x => (x.id === m.id ? { ...x, gender: next } : x)))
+    await supabase.from('members').update({ gender: next }).eq('id', m.id)
+  }
+
   function openAdd() {
     setEditing(null)
-    setForm({ name: '', phone: '', join_date: '', memo: '', status: 'member' })
+    setForm({ name: '', phone: '', join_date: '', memo: '', status: 'member', gender: '' })
     setNameErr(false)
     setModalOpen(true)
   }
 
   function openEdit(m: Member) {
     setEditing(m)
-    setForm({ name: m.name, phone: m.phone || '', join_date: m.join_date || '', memo: m.memo || '', status: m.status })
+    setForm({ name: m.name, phone: m.phone || '', join_date: m.join_date || '', memo: m.memo || '', status: m.status, gender: m.gender || '' })
     setNameErr(false)
     setModalOpen(true)
   }
@@ -119,7 +126,7 @@ export default function Home() {
     if (editing) {
       const { error } = await supabase
         .from('members')
-        .update({ name: form.name, phone: form.phone, join_date: form.join_date, memo: form.memo, status: form.status })
+        .update({ name: form.name, phone: form.phone, join_date: form.join_date, memo: form.memo, status: form.status, gender: form.gender || null })
         .eq('id', editing.id)
       if (!error) fetchMembers()
     } else {
@@ -129,6 +136,7 @@ export default function Home() {
         join_date: form.join_date,
         memo: form.memo,
         status: form.status,
+        gender: form.gender || null,
       })
       if (!error) fetchMembers()
     }
@@ -253,7 +261,7 @@ export default function Home() {
         <table>
           <thead>
             <tr>
-              <th>이름</th><th>상태</th><th>연락처</th><th>가입 시기</th>
+              <th>이름</th><th>성별</th><th>상태</th><th>연락처</th><th>가입 시기</th>
               <th>1분기</th><th>2분기</th><th>3분기</th><th>4분기</th>
               <th>메모</th><th></th>
             </tr>
@@ -270,6 +278,21 @@ export default function Home() {
                   {!isAdmin && m.is_officer && <span className="officer-star readonly">★</span>}
                   {m.name}
                   {m.is_officer && <span className="officer-badge">운영진</span>}
+                </td>
+                <td>
+                  {isAdmin ? (
+                    <select
+                      className="gender-select"
+                      value={m.gender || ''}
+                      onChange={e => setGender(m, e.target.value as 'M' | 'F' | '')}
+                    >
+                      <option value="">-</option>
+                      <option value="M">남</option>
+                      <option value="F">여</option>
+                    </select>
+                  ) : (
+                    <GenderIcon gender={m.gender} />
+                  )}
                 </td>
                 <td>
                   {isAdmin ? (
@@ -337,6 +360,14 @@ export default function Home() {
                 <option value="member">정회원</option>
                 <option value="guest">게스트</option>
                 <option value="alumni">동문</option>
+              </select>
+            </div>
+            <div className="field">
+              <label>성별</label>
+              <select value={form.gender} onChange={e => setForm({ ...form, gender: e.target.value as 'M' | 'F' | '' })}>
+                <option value="">선택 안 함</option>
+                <option value="M">남</option>
+                <option value="F">여</option>
               </select>
             </div>
             <div className="field">
