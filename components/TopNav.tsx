@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/useAuth'
 const NAV_ITEMS = [
   { href: '/', label: '회원 관리' },
   { href: '/account', label: '장부' },
+  { href: '/membership-ledger', label: '멤버십 장부' },
   { href: '/gallery', label: '사진·동영상' },
   { href: '/games', label: '경기' },
   { href: '/policy', label: '모임 Policy' },
