@@ -12,6 +12,8 @@ type MediaItem = {
   isVideo: boolean
   quarter: string
   event: string
+  sortOrder: number | null
+  createdAt: string
 }
 
 const VIDEO_EXT = ['mp4', 'mov', 'webm', 'm4v']
@@ -50,6 +52,8 @@ export default function GalleryPage() {
           isVideo: row.is_video,
           quarter: row.quarter || UNSPECIFIED_Q,
           event: row.event_name || UNSPECIFIED_EVENT,
+          sortOrder: row.sort_order,
+          createdAt: row.created_at,
         }
       })
       setItems(list)
@@ -114,11 +118,39 @@ export default function GalleryPage() {
       if (!eventMap.has(item.event)) eventMap.set(item.event, [])
       eventMap.get(item.event)!.push(item)
     }
+    for (const eventMap of quarterMap.values()) {
+      for (const list of eventMap.values()) {
+        list.sort((a, b) => {
+          if (a.sortOrder != null && b.sortOrder != null) return a.sortOrder - b.sortOrder
+          if (a.sortOrder != null) return -1
+          if (b.sortOrder != null) return 1
+          return b.createdAt.localeCompare(a.createdAt)
+        })
+      }
+    }
     return Array.from(quarterMap.entries()).map(([quarter, eventMap]) => ({
       quarter,
       events: Array.from(eventMap.entries()),
     }))
   }, [items])
+
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+
+  async function reorderItems(quarter: string, eventName: string, dragId: string, dropId: string) {
+    const groupItems = items.filter(it => it.quarter === quarter && it.event === eventName)
+    const others = items.filter(it => !(it.quarter === quarter && it.event === eventName))
+    const dragIdx = groupItems.findIndex(it => it.id === dragId)
+    const dropIdx = groupItems.findIndex(it => it.id === dropId)
+    if (dragIdx === -1 || dropIdx === -1 || dragIdx === dropIdx) return
+    const reordered = [...groupItems]
+    const [moved] = reordered.splice(dragIdx, 1)
+    reordered.splice(dropIdx, 0, moved)
+    const withOrder = reordered.map((it, idx) => ({ ...it, sortOrder: idx }))
+    setItems([...others, ...withOrder])
+    for (const it of withOrder) {
+      await supabase.from('gallery_items').update({ sort_order: it.sortOrder }).eq('id', it.id)
+    }
+  }
 
   return (
     <div className="wrap">
@@ -159,7 +191,22 @@ export default function GalleryPage() {
               )}
               <div className="gallery-grid">
                 {eventItems.map(item => (
-                  <div key={item.id} className="gallery-item" onClick={() => setPreview(item)}>
+                  <div
+                    key={item.id}
+                    className={`gallery-item ${isAdmin ? 'draggable' : ''} ${draggingId === item.id ? 'dragging' : ''}`}
+                    draggable={isAdmin}
+                    onDragStart={() => setDraggingId(item.id)}
+                    onDragEnd={() => setDraggingId(null)}
+                    onDragOver={e => { if (isAdmin) e.preventDefault() }}
+                    onDrop={e => {
+                      e.preventDefault()
+                      if (isAdmin && draggingId && draggingId !== item.id) {
+                        reorderItems(quarter, eventName, draggingId, item.id)
+                      }
+                      setDraggingId(null)
+                    }}
+                    onClick={() => { if (!draggingId) setPreview(item) }}
+                  >
                     {item.isVideo ? (
                       <video src={item.url} className="gallery-thumb" muted />
                     ) : (
