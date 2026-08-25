@@ -216,9 +216,9 @@ function computeStats(matches: MatchRow[]): PlayerStat[] {
 }
 
 function quarterLabel(dateStr: string): string {
-  const d = new Date(dateStr)
-  const yy = String(d.getFullYear()).slice(2)
-  const q = Math.floor(d.getMonth() / 3) + 1
+  const [y, m] = dateStr.split('-')
+  const yy = y.slice(2)
+  const q = Math.floor((Number(m) - 1) / 3) + 1
   return `${yy}Q${q}`
 }
 
