@@ -248,6 +248,22 @@ function genderAwareRound(
   return balancedRoundAttempt(playing, skillMap, partnerFreq, usedPairs)
 }
 
+// 선수별로 참가한 대회(세션) 고유 개수 계산
+function computeEventCounts(allMatches: MatchRow[]): Record<string, number> {
+  const sessionSets: Record<string, Set<string>> = {}
+  for (const m of allMatches) {
+    if (!m.session_id) continue
+    const allPlayers = [...m.team1, ...m.team2]
+    for (const p of allPlayers) {
+      if (!sessionSets[p]) sessionSets[p] = new Set()
+      sessionSets[p].add(m.session_id)
+    }
+  }
+  const counts: Record<string, number> = {}
+  for (const p of Object.keys(sessionSets)) counts[p] = sessionSets[p].size
+  return counts
+}
+
 function generateRoundsFlexible(
   players: string[],
   desiredGames: number,
@@ -533,6 +549,17 @@ function GamesPageInner() {
   }, [activeMatches])
   const activeStats = useMemo(() => computeStats(activeMatches), [activeMatches])
   const overallStats = useMemo(() => computeStats(allMatches), [allMatches])
+  const eventCounts = useMemo(() => computeEventCounts(allMatches), [allMatches])
+  const [collapsedQuarters, setCollapsedQuarters] = useState<Set<string>>(new Set())
+
+  function toggleQuarterCollapse(quarter: string) {
+    setCollapsedQuarters(prev => {
+      const next = new Set(prev)
+      if (next.has(quarter)) next.delete(quarter)
+      else next.add(quarter)
+      return next
+    })
+  }
 
   // 10번: 개인별 전적
   const playerMatches = selectedPlayer
@@ -641,24 +668,32 @@ function GamesPageInner() {
       {tab === 'sessions' && !activeSession && (
         <>
           {!loading && sessions.length === 0 && <div className="empty">아직 생성된 대회가 없어요.</div>}
-          {sessionsByQuarter.map(({ quarter, dates }) => (
-            <div key={quarter} className="quarter-session-group">
-              <h3 className="gallery-quarter-title">{quarter}</h3>
-              {dates.map(([date, sessList]) => (
-                <div key={date} className="session-date-group">
-                  <h4 className="session-date-title">{date}</h4>
-                  <div className="session-card-list">
-                    {sessList.map(s => (
-                      <button key={s.id} className="session-card" onClick={() => { setActiveSessionId(s.id); setSessionTab('results') }}>
-                        <span className="session-card-title">{s.title}</span>
-                        <span className="session-card-meta">1인당 {s.games_per_player}게임 · {s.end_score}점 종료</span>
-                      </button>
-                    ))}
+          {sessionsByQuarter.map(({ quarter, dates }) => {
+            const collapsed = collapsedQuarters.has(quarter)
+            const totalCount = dates.reduce((sum, [, list]) => sum + list.length, 0)
+            return (
+              <div key={quarter} className="quarter-session-group">
+                <button className="quarter-toggle" onClick={() => toggleQuarterCollapse(quarter)}>
+                  <span className={`quarter-toggle-arrow ${collapsed ? 'collapsed' : ''}`}>▾</span>
+                  <span className="gallery-quarter-title" style={{ margin: 0, border: 'none', padding: 0 }}>{quarter}</span>
+                  <span className="quarter-toggle-count">{totalCount}개 대회</span>
+                </button>
+                {!collapsed && dates.map(([date, sessList]) => (
+                  <div key={date} className="session-date-group">
+                    <h4 className="session-date-title">{date}</h4>
+                    <div className="session-card-list">
+                      {sessList.map(s => (
+                        <button key={s.id} className="session-card" onClick={() => { setActiveSessionId(s.id); setSessionTab('results') }}>
+                          <span className="session-card-title">{s.title}</span>
+                          <span className="session-card-meta">1인당 {s.games_per_player}게임 · {s.end_score}점 종료</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          ))}
+                ))}
+              </div>
+            )
+          })}
         </>
       )}
 
@@ -755,8 +790,8 @@ function GamesPageInner() {
               <table>
                 <thead>
                   <tr>
-                    <th>순위</th><th>이름</th><th>경기수</th><th>승</th><th>무</th><th>패</th><th>승점</th><th>득실</th>
-                    <th>베스트 파트너</th><th>최다 상대</th>
+                    <th>순위</th><th>이름</th><th>경기수</th><th>승</th><th>무</th><th>패</th><th>승률</th><th>승점</th><th>득실</th>
+                    <th>이벤트 참가</th><th>베스트 파트너</th><th>최다 상대</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -768,8 +803,10 @@ function GamesPageInner() {
                       <td>{s.wins}</td>
                       <td>{s.draws}</td>
                       <td>{s.losses}</td>
+                      <td>{s.games > 0 ? `${((s.wins / s.games) * 100).toFixed(1)}%` : '-'}</td>
                       <td className="ledger-total">{s.points}P</td>
                       <td>{s.diff > 0 ? `+${s.diff}` : s.diff}</td>
+                      <td>{eventCounts[s.name] || 0}회</td>
                       <td>{s.bestPartner ? `${s.bestPartner} (${s.bestPartnerCount}회)` : '-'}</td>
                       <td>{s.rival ? `${s.rival} (${s.rivalCount}회)` : '-'}</td>
                     </tr>
@@ -791,8 +828,10 @@ function GamesPageInner() {
             <div className="stats">
               <div className="stat"><div className="label">경기수</div><div className="value">{playerStat.games}</div></div>
               <div className="stat"><div className="label">승-무-패</div><div className="value">{playerStat.wins}-{playerStat.draws}-{playerStat.losses}</div></div>
+              <div className="stat"><div className="label">승률</div><div className="value">{playerStat.games > 0 ? `${((playerStat.wins / playerStat.games) * 100).toFixed(1)}%` : '-'}</div></div>
               <div className="stat"><div className="label">승점</div><div className="value">{playerStat.points}P</div></div>
               <div className="stat"><div className="label">득실</div><div className="value">{playerStat.diff > 0 ? `+${playerStat.diff}` : playerStat.diff}</div></div>
+              <div className="stat"><div className="label">이벤트 참가</div><div className="value">{(selectedPlayer && eventCounts[selectedPlayer]) || 0}회</div></div>
             </div>
           )}
 
