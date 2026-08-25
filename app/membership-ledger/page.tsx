@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { supabase, MemberStatus, STATUS_LABEL } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
@@ -29,7 +29,7 @@ const MONTHS: Array<{ key: keyof LedgerRow; label: string }> = [
   { key: 'oct', label: '10월' }, { key: 'nov', label: '11월' }, { key: 'dec', label: '12월' },
 ]
 
-export default function MembershipLedgerPage() {
+function MembershipLedgerPageInner() {
   const { isAdmin } = useAuth()
   const searchParams = useSearchParams()
   const [unlocked, setUnlocked] = useState(false)
@@ -279,5 +279,13 @@ export default function MembershipLedgerPage() {
         {!loading && filtered.length === 0 && <div className="empty">내역이 없어요.</div>}
       </div>
     </div>
+  )
+}
+
+export default function MembershipLedgerPage() {
+  return (
+    <Suspense fallback={null}>
+      <MembershipLedgerPageInner />
+    </Suspense>
   )
 }

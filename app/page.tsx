@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { supabase, Member, MemberStatus, STATUS_LABEL } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
@@ -20,7 +20,7 @@ const QUARTER_MONTHS: string[][] = [
   ['jan', 'feb', 'mar'], ['apr', 'may', 'jun'], ['jul', 'aug', 'sep'], ['oct', 'nov', 'dec'],
 ]
 
-export default function Home() {
+function HomeInner() {
   const { isAdmin } = useAuth()
   const searchParams = useSearchParams()
   const [members, setMembers] = useState<Member[]>([])
@@ -340,5 +340,13 @@ export default function Home() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={null}>
+      <HomeInner />
+    </Suspense>
   )
 }

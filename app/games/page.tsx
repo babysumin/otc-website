@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { supabase, Member } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
@@ -222,7 +222,7 @@ function quarterLabel(dateStr: string): string {
   return `${yy}Q${q}`
 }
 
-export default function GamesPage() {
+function GamesPageInner() {
   const { isAdmin } = useAuth()
   const searchParams = useSearchParams()
   const [tab, setTab] = useState<'create' | 'sessions' | 'ranking'>('sessions')
@@ -680,5 +680,13 @@ export default function GamesPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function GamesPage() {
+  return (
+    <Suspense fallback={null}>
+      <GamesPageInner />
+    </Suspense>
   )
 }
