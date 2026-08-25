@@ -288,10 +288,8 @@ export default function Home() {
                 </td>
                 <td className="phone-cell">{m.phone || '-'}</td>
                 <td>{m.join_date || '-'}</td>
-                {QUARTERS.map((q, idx) => {
-                  const joinQ = parseJoinQuarter(m.join_date)
-                  const isPreJoin = m.status === 'member' && joinQ !== null && (idx + 1) < joinQ
-                  const isApplicable = m.status === 'member' && !isPreJoin
+                {QUARTERS.map((q) => {
+                  const isApplicable = m.status === 'member'
                   const value = m[q]
                   if (!isApplicable) {
                     return <td key={q}><span className="qpill empty readonly">-</span></td>
