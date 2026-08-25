@@ -195,7 +195,7 @@ function MembershipLedgerPageInner() {
         <table>
           <thead>
             <tr>
-              <th rowSpan={2}>이름</th><th rowSpan={2}>성별</th><th rowSpan={2}>상태</th>
+              <th rowSpan={2} className="sticky-col-head">이름</th><th rowSpan={2}>성별</th><th rowSpan={2}>상태</th>
               <th colSpan={3} className="quarter-head">1분기</th>
               <th colSpan={3} className="quarter-head">2분기</th>
               <th colSpan={3} className="quarter-head">3분기</th>
@@ -218,7 +218,7 @@ function MembershipLedgerPageInner() {
               const status = effectiveStatus(r)
               return (
                 <tr key={r.id}>
-                  <td className="name-cell">{r.member_name}</td>
+                  <td className="name-cell sticky-col-body">{r.member_name}</td>
                   <td>
                     {isAdmin ? (
                       <select
