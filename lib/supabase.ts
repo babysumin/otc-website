@@ -20,6 +20,7 @@ export type Member = {
   status: MemberStatus
   is_officer: boolean
   gender: Gender
+  ranking_group: 'A' | 'B' | null
   q1_paid: FeeStatus
   q2_paid: FeeStatus
   q3_paid: FeeStatus

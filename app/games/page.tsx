@@ -555,8 +555,25 @@ function GamesPageInner() {
     return Array.from(map.entries()).sort((a, b) => a[0] - b[0])
   }, [activeMatches])
   const activeStats = useMemo(() => computeStats(activeMatches), [activeMatches])
-  const overallStats = useMemo(() => computeStats(allMatches), [allMatches])
-  const eventCounts = useMemo(() => computeEventCounts(allMatches), [allMatches])
+  const [rankingGroupFilter, setRankingGroupFilter] = useState<'all' | 'A' | 'B'>('all')
+
+  // 8번: 회원의 랭킹전 그룹 정보로 매치를 필터링
+  const nameToRankingGroup = useMemo(() => {
+    const map: Record<string, 'A' | 'B' | null> = {}
+    members.forEach(m => { map[m.name] = m.ranking_group })
+    return map
+  }, [members])
+
+  function matchInGroup(m: MatchRow, group: 'all' | 'A' | 'B') {
+    if (group === 'all') return true
+    const allPlayers = [...m.team1, ...m.team2]
+    return allPlayers.every(p => nameToRankingGroup[p] === group)
+  }
+
+  const groupFilteredMatches = useMemo(() => allMatches.filter(m => matchInGroup(m, rankingGroupFilter)), [allMatches, rankingGroupFilter, nameToRankingGroup])
+
+  const overallStats = useMemo(() => computeStats(groupFilteredMatches), [groupFilteredMatches])
+  const eventCounts = useMemo(() => computeEventCounts(groupFilteredMatches), [groupFilteredMatches])
   const [collapsedQuarters, setCollapsedQuarters] = useState<Set<string>>(new Set())
   const [collapsedRankingQuarters, setCollapsedRankingQuarters] = useState<Set<string>>(new Set())
 
@@ -587,7 +604,7 @@ function GamesPageInner() {
 
   const rankingByQuarter = useMemo(() => {
     const groups: Record<string, MatchRow[]> = {}
-    allMatches.forEach(m => {
+    groupFilteredMatches.forEach(m => {
       if (!m.session_id) return
       const q = sessionQuarterMap[m.session_id]
       if (!q) return
@@ -838,6 +855,17 @@ function GamesPageInner() {
       {tab === 'ranking' && !selectedPlayer && (
         <>
           <p className="ranking-note">승리 +{WIN_POINTS}P / 무승부 +{DRAW_POINTS}P / 패배 +{LOSE_POINTS}P 기준으로 계산돼요. 이름을 클릭하면 개인별 전적을 볼 수 있어요.</p>
+
+          <div className="toolbar">
+            <select value={rankingGroupFilter} onChange={e => setRankingGroupFilter(e.target.value as 'all' | 'A' | 'B')}>
+              <option value="all">전체 (A+B 그룹 모두)</option>
+              <option value="A">A그룹만</option>
+              <option value="B">B그룹만</option>
+            </select>
+          </div>
+          {rankingGroupFilter !== 'all' && (
+            <p className="upload-hint">회원 페이지에서 랭킹전 그룹을 지정한 선수들끼리만 뛴 경기만 집계돼요.</p>
+          )}
 
           <h3 className="subsection-title">전체 누적 랭킹</h3>
           {overallStats.length === 0 && <div className="empty">아직 결과가 입력된 경기가 없어요.</div>}
