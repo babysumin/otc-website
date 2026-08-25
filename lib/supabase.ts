@@ -7,6 +7,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 export type MemberStatus = 'member' | 'guest' | 'alumni'
 
+export type FeeStatus = 'paid' | 'unpaid' | null
+
 export type Member = {
   id: string
   name: string
@@ -15,10 +17,10 @@ export type Member = {
   memo: string | null
   status: MemberStatus
   is_officer: boolean
-  q1_paid: boolean
-  q2_paid: boolean
-  q3_paid: boolean
-  q4_paid: boolean
+  q1_paid: FeeStatus
+  q2_paid: FeeStatus
+  q3_paid: FeeStatus
+  q4_paid: FeeStatus
   created_at?: string
 }
 

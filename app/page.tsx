@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, Member, MemberStatus, STATUS_LABEL } from '@/lib/supabase'
+import { useAuth } from '@/lib/useAuth'
+import TopNav from '@/components/TopNav'
 
 const FEE_PER_QUARTER = 30
 const CURRENT_QUARTER: 'q1_paid' | 'q2_paid' | 'q3_paid' | 'q4_paid' = 'q3_paid'
@@ -12,8 +14,10 @@ const STATUS_TABS: Array<{ key: 'all' | MemberStatus; label: string }> = [
   { key: 'guest', label: '게스트' },
   { key: 'alumni', label: '동문' },
 ]
+const STATUS_ORDER: Record<MemberStatus, number> = { member: 0, guest: 1, alumni: 2 }
 
 export default function Home() {
+  const { isAdmin } = useAuth()
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -30,42 +34,11 @@ export default function Home() {
   const [introDraft, setIntroDraft] = useState('')
   const [photoDraft, setPhotoDraft] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
-  const [logoError, setLogoError] = useState(false)
-
-  const [session, setSession] = useState<any>(null)
-  const [loginOpen, setLoginOpen] = useState(false)
-  const [loginEmail, setLoginEmail] = useState('')
-  const [loginPassword, setLoginPassword] = useState('')
-  const [loginErr, setLoginErr] = useState('')
-  const isAdmin = !!session
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session))
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, s) => setSession(s))
-    return () => listener.subscription.unsubscribe()
-  }, [])
 
   useEffect(() => {
     fetchMembers()
     fetchIntro()
   }, [])
-
-  async function handleLogin() {
-    setLoginErr('')
-    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword })
-    if (error) {
-      setLoginErr('이메일 또는 비밀번호가 올바르지 않아요')
-      return
-    }
-    setLoginOpen(false)
-    setLoginEmail('')
-    setLoginPassword('')
-  }
-
-  async function handleLogout() {
-    await supabase.auth.signOut()
-  }
-
 
   async function fetchIntro() {
     const { data } = await supabase.from('club_info').select('intro, photo_url').eq('id', 1).single()
@@ -101,10 +74,18 @@ export default function Home() {
     setLoading(false)
   }
 
-  async function toggleFee(m: Member, q: typeof QUARTERS[number]) {
-    const updated = { ...m, [q]: !m[q] }
-    setMembers(prev => prev.map(x => (x.id === m.id ? updated : x)))
-    await supabase.from('members').update({ [q]: updated[q] }).eq('id', m.id)
+  function parseJoinQuarter(joinDate: string | null): number | null {
+    if (!joinDate) return null
+    const match = joinDate.match(/Q([1-4])/)
+    return match ? Number(match[1]) : null
+  }
+
+  async function cycleFee(m: Member, q: typeof QUARTERS[number]) {
+    const order: Array<Member[typeof q]> = [null, 'unpaid', 'paid']
+    const currentIdx = order.indexOf(m[q])
+    const next = order[(currentIdx + 1) % order.length]
+    setMembers(prev => prev.map(x => (x.id === m.id ? { ...x, [q]: next } : x)))
+    await supabase.from('members').update({ [q]: next }).eq('id', m.id)
   }
 
   async function changeStatus(m: Member, status: MemberStatus) {
@@ -164,8 +145,6 @@ export default function Home() {
     fetchMembers()
   }
 
-  const STATUS_ORDER: Record<MemberStatus, number> = { member: 0, guest: 1, alumni: 2 }
-
   const filtered = useMemo(() => {
     return members
       .filter(m => {
@@ -183,42 +162,22 @@ export default function Home() {
       })
   }, [members, search, feeFilter, statusTab])
 
-  // 상단 통계는 현재 선택된 상태 탭 기준으로 자동 계산됨
   const scoped = useMemo(() => {
     return statusTab === 'all' ? members : members.filter(m => m.status === statusTab)
   }, [members, statusTab])
 
-  // 회비 관련 통계는 항상 정회원(status='member') 기준으로 계산 (게스트/동문은 분기 회비 대상 아님)
   const feeScoped = statusTab === 'all' ? members.filter(m => m.status === 'member') : scoped
   const total = statusTab === 'all' ? members.filter(m => m.status === 'member').length : scoped.length
-  const paidCount = feeScoped.filter(m => m[CURRENT_QUARTER]).length
-  const unpaidCount = statusTab === 'guest' || statusTab === 'alumni' ? 0 : feeScoped.length - paidCount
+  const paidCount = feeScoped.filter(m => m[CURRENT_QUARTER] === 'paid').length
+  const unpaidCount = statusTab === 'guest' || statusTab === 'alumni' ? 0 : feeScoped.filter(m => m[CURRENT_QUARTER] === 'unpaid').length
 
   return (
     <div className="wrap">
-      <div className="header">
-        <div className="brand">
-          {logoError ? (
-            <div className="mark">OTC</div>
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src="/logo.png" alt="OTC" className="mark-img" onError={() => setLogoError(true)} />
-          )}
-          <div>
-            <h1>On the Court</h1>
-            <p>회원 명단 · 2026년 회비 관리</p>
-          </div>
-        </div>
-        <div className="header-actions">
-          {isAdmin ? (
-            <>
-              <button className="btn primary" onClick={openAdd}>+ 회원 추가</button>
-              <button className="btn" onClick={handleLogout}>로그아웃</button>
-            </>
-          ) : (
-            <button className="btn" onClick={() => setLoginOpen(true)}>관리자 로그인</button>
-          )}
-        </div>
+      <TopNav />
+
+      <div className="section-header">
+        <h2 className="section-title">회원 명단</h2>
+        {isAdmin && <button className="btn primary" onClick={openAdd}>+ 회원 추가</button>}
       </div>
 
       <div className="intro-box">
@@ -242,7 +201,7 @@ export default function Home() {
               className="intro-textarea"
               value={introDraft}
               onChange={e => setIntroDraft(e.target.value)}
-              placeholder="클럽 소개글을 적어주세요 (예: On the Court는 2024년에 시작된 테니스 동호회입니다...)"
+              placeholder="클럽 소개글을 적어주세요"
             />
             <div className="intro-actions">
               <button className="btn" onClick={() => setIntroEditing(false)}>취소</button>
@@ -260,11 +219,11 @@ export default function Home() {
         )}
       </div>
 
-      <div className="tabs">
+      <div className="subtabs">
         {STATUS_TABS.map(t => (
           <button
             key={t.key}
-            className={`tab ${statusTab === t.key ? 'active' : ''}`}
+            className={`subtab ${statusTab === t.key ? 'active' : ''}`}
             onClick={() => setStatusTab(t.key)}
           >
             {t.label}
@@ -331,16 +290,24 @@ export default function Home() {
                 </td>
                 <td className="phone-cell">{m.phone || '-'}</td>
                 <td>{m.join_date || '-'}</td>
-                {QUARTERS.map(q => (
-                  <td key={q}>
-                    <span
-                      className={`qpill ${m[q] ? 'paid' : 'unpaid'} ${isAdmin ? '' : 'readonly'}`}
-                      onClick={() => { if (isAdmin) toggleFee(m, q) }}
-                    >
-                      {m[q] ? '완납' : '미납'}
-                    </span>
-                  </td>
-                ))}
+                {QUARTERS.map((q, idx) => {
+                  const joinQ = parseJoinQuarter(m.join_date)
+                  const isPreJoin = m.status === 'member' && joinQ !== null && (idx + 1) < joinQ
+                  const isApplicable = m.status === 'member' && !isPreJoin
+                  const value = m[q]
+                  const label = !isApplicable ? '-' : value === 'paid' ? '완납' : value === 'unpaid' ? '미납' : '-'
+                  const cls = value === 'paid' ? 'paid' : value === 'unpaid' ? 'unpaid' : 'empty'
+                  return (
+                    <td key={q}>
+                      <span
+                        className={`qpill ${cls} ${isAdmin && isApplicable ? '' : 'readonly'}`}
+                        onClick={() => { if (isAdmin && isApplicable) cycleFee(m, q) }}
+                      >
+                        {label}
+                      </span>
+                    </td>
+                  )
+                })}
                 <td className="memo-cell" title={m.memo || ''}>{m.memo || '-'}</td>
                 <td>{isAdmin && <button className="icon-btn" onClick={() => openEdit(m)}>⋯</button>}</td>
               </tr>
@@ -349,27 +316,6 @@ export default function Home() {
         </table>
         {!loading && filtered.length === 0 && <div className="empty">해당하는 회원이 없어요.</div>}
       </div>
-
-      {loginOpen && (
-        <div className="modal-overlay show" onClick={e => { if (e.target === e.currentTarget) setLoginOpen(false) }}>
-          <div className="modal">
-            <h2>관리자 로그인</h2>
-            <div className="field">
-              <label>이메일</label>
-              <input type="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="you@example.com" />
-            </div>
-            <div className="field">
-              <label>비밀번호</label>
-              <input type="password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleLogin() }} />
-              {loginErr && <div className="err">{loginErr}</div>}
-            </div>
-            <div className="modal-actions">
-              <button className="btn" onClick={() => setLoginOpen(false)}>취소</button>
-              <button className="btn primary" onClick={handleLogin}>로그인</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {modalOpen && (
         <div className="modal-overlay show" onClick={e => { if (e.target === e.currentTarget) setModalOpen(false) }}>
