@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { supabase, Member } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 import { useMemberAuth } from '@/lib/useMemberAuth'
+import { getHanwoolSchedule, maxHanwoolGames, buildHanwoolMatches } from '@/lib/hanwoolTable'
 import TopNav from '@/components/TopNav'
 import MemberGate from '@/components/MemberGate'
 
@@ -399,13 +400,14 @@ function GamesPageInner() {
   const [loading, setLoading] = useState(true)
 
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [matchMode, setMatchMode] = useState<'balanced' | 'hanwool'>('balanced')
   const [gamesPerPlayer, setGamesPerPlayer] = useState('4')
   const [endScore, setEndScore] = useState('4')
   const [groupLabel, setGroupLabel] = useState('A')
   const [sessionTitle, setSessionTitle] = useState('')
   const [titleTouched, setTitleTouched] = useState(false)
   const [confirmMsg, setConfirmMsg] = useState<string | null>(null)
-  const [pendingGeneration, setPendingGeneration] = useState<{ rounds: [string, string][][]; actualGames: number; skillMap: Record<string, number>; oppFreq: Record<string, number> } | null>(null)
+  const [pendingGeneration, setPendingGeneration] = useState<{ rounds: [string, string][][]; actualGames: number; skillMap: Record<string, number>; oppFreq: Record<string, number>; hanwoolSeeded?: string[] } | null>(null)
 
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [sessionTab, setSessionTab] = useState<'info' | 'results' | 'ranking'>('results')
@@ -455,6 +457,26 @@ function GamesPageInner() {
       alert('최소 4명 이상 선택해주세요')
       return
     }
+
+    if (matchMode === 'hanwool') {
+      if (players.length < 5 || players.length > 16) {
+        alert('한울 AA 공식표는 5~16명일 때만 사용할 수 있어요. 인원을 조정하거나 "우리 자동 밸런스" 방식을 선택해주세요.')
+        return
+      }
+      const skillMap = computeQuarterSkillMap(sessions, allMatches, players)
+      // 시드1 = 가장 잘하는 사람 순으로 정렬해서 표에 대입
+      const seeded = [...players].sort((a, b) => (skillMap[b] || 0) - (skillMap[a] || 0))
+      const desired = Number(gamesPerPlayer) || 1
+      const maxGames = maxHanwoolGames(seeded.length)
+      if (desired > maxGames) {
+        setConfirmMsg(`한울표는 ${seeded.length}명 기준 최대 ${maxGames}게임까지만 지원해요. ${maxGames}게임으로 진행할까요?`)
+        setPendingGeneration({ rounds: [], actualGames: maxGames, skillMap, oppFreq: {}, hanwoolSeeded: seeded })
+      } else {
+        createHanwoolSession(seeded, desired)
+      }
+      return
+    }
+
     const genderMap: Record<string, 'M' | 'F' | null> = {}
     members.forEach(m => { genderMap[m.name] = m.gender })
     const skillMap = computeQuarterSkillMap(sessions, allMatches, players)
@@ -471,6 +493,43 @@ function GamesPageInner() {
     } else {
       createSession(rounds, desired, skillMap, oppFreq)
     }
+  }
+
+  async function createHanwoolSession(seededPlayers: string[], desiredGames: number) {
+    const today = new Date()
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    const title = sessionTitle.trim() || `${dateStr} 대회 ${groupLabel}`
+
+    const { data: session, error } = await supabase
+      .from('match_sessions')
+      .insert({ title, session_date: dateStr, group_label: groupLabel, games_per_player: desiredGames, end_score: Number(endScore) })
+      .select()
+      .single()
+
+    if (error || !session) return
+
+    const matches = buildHanwoolMatches(seededPlayers, desiredGames)
+    const matchRows = matches.map((m, idx) => ({
+      session_id: session.id,
+      round_no: idx + 1,
+      team1: m.team1,
+      team2: m.team2,
+      score1: null,
+      score2: null,
+    }))
+
+    if (matchRows.length > 0) {
+      await supabase.from('matches').insert(matchRows)
+    }
+
+    setSelected(new Set())
+    setConfirmMsg(null)
+    setPendingGeneration(null)
+    setTitleTouched(false)
+    await fetchAll()
+    setActiveSessionId(session.id)
+    setSessionTab('results')
+    setTab('sessions')
   }
 
   async function createSession(rounds: [string, string][][], actualGames: number, skillMap: Record<string, number>, oppFreq: Record<string, number>) {
@@ -693,6 +752,17 @@ function GamesPageInner() {
             ))}
           </div>
 
+          <div className="field" style={{ marginTop: 12 }}>
+            <label>매칭 방식</label>
+            <select value={matchMode} onChange={e => setMatchMode(e.target.value as 'balanced' | 'hanwool')}>
+              <option value="balanced">우리 자동 밸런스 (실력차/편중 방지 자동 조정)</option>
+              <option value="hanwool">한울 AA 공식표 (5~16명 전용, 실력순 시드 배정)</option>
+            </select>
+            {matchMode === 'hanwool' && (
+              <p className="upload-hint">이번 분기 승점 기준으로 강한 순서대로 시드1, 시드2...를 배정해서 한울 공식표를 그대로 적용해요. 5~16명일 때만 가능해요.</p>
+            )}
+          </div>
+
           <div className="create-options">
             <div className="field">
               <label>1인당 게임수</label>
@@ -728,7 +798,18 @@ function GamesPageInner() {
                 <p style={{ fontSize: 14, lineHeight: 1.6 }}>{confirmMsg}</p>
                 <div className="modal-actions">
                   <button className="btn" onClick={() => { setConfirmMsg(null); setPendingGeneration(null) }}>취소</button>
-                  <button className="btn primary" onClick={() => createSession(pendingGeneration.rounds, pendingGeneration.actualGames, pendingGeneration.skillMap, pendingGeneration.oppFreq)}>진행합니다</button>
+                  <button
+                    className="btn primary"
+                    onClick={() => {
+                      if (pendingGeneration.hanwoolSeeded) {
+                        createHanwoolSession(pendingGeneration.hanwoolSeeded, pendingGeneration.actualGames)
+                      } else {
+                        createSession(pendingGeneration.rounds, pendingGeneration.actualGames, pendingGeneration.skillMap, pendingGeneration.oppFreq)
+                      }
+                    }}
+                  >
+                    진행합니다
+                  </button>
                 </div>
               </div>
             </div>
