@@ -1,11 +1,13 @@
 :root{
-  --navy:#1b2a4a; --navy-light:#2e4270;
-  --line:#e2e5eb; --line-strong:#c7ccd6; --bg:#f6f7f9; --card:#ffffff;
-  --text:#1a1d24; --text-sub:#6b7280; --text-faint:#9aa0ab;
+  --navy:#144a72; --navy-light:#1c6294;
+  --accent:#c3d92c; --accent-dark:#7a8a15;
+  --line:#dfe4e8; --line-strong:#c1c9d1; --bg:#f4f7f8; --card:#ffffff;
+  --text:#182430; --text-sub:#5c6b78; --text-faint:#94a3af;
   --danger:#c2492c; --danger-bg:#fbeae5; --ok:#2f6f4e; --ok-bg:#e8f3ec;
 }
 *{box-sizing:border-box;}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--text);}
+.court-line{height:4px;background:var(--accent);}
 .wrap{max-width:1040px;margin:0 auto;padding:28px 20px 60px;}
 .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:12px;}
 .header-actions{display:flex;gap:8px;}
@@ -34,8 +36,9 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"He
 .brand p{margin:0;font-size:13px;color:var(--text-sub);}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px;}
 .tabs{display:flex;gap:6px;margin-bottom:24px;border-bottom:1px solid var(--line);padding-bottom:0;}
-.tab{height:38px;padding:0 4px;margin-bottom:-1px;border:none;border-bottom:2px solid transparent;background:transparent;font-size:14px;font-weight:600;cursor:pointer;color:var(--text-sub);display:flex;align-items:center;text-decoration:none;}
-.tab.active{color:var(--navy);border-bottom-color:var(--navy);}
+.tab{height:38px;padding:0 4px;margin-bottom:-1px;border:none;border-bottom:3px solid transparent;background:transparent;font-size:14px;font-weight:600;cursor:pointer;color:var(--text-sub);display:flex;align-items:center;text-decoration:none;transition:color .15s;}
+.tab:hover{color:var(--navy);}
+.tab.active{color:var(--navy);border-bottom-color:var(--accent);}
 .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;}
 .section-title{font-size:16px;font-weight:700;margin:0;}
 .subtabs{display:flex;gap:6px;margin-bottom:16px;}
@@ -89,8 +92,9 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"He
 .search{flex:1;min-width:180px;}
 .search input{width:100%;height:38px;border:1px solid var(--line-strong);border-radius:8px;padding:0 12px;font-size:14px;background:var(--card);}
 select{height:38px;border:1px solid var(--line-strong);border-radius:8px;padding:0 10px;font-size:14px;background:var(--card);}
-.btn{height:38px;padding:0 16px;border-radius:8px;border:1px solid var(--line-strong);background:var(--card);font-size:14px;font-weight:600;cursor:pointer;color:var(--text);}
-.btn:hover{background:#f0f1f3;}
+.btn{height:38px;padding:0 16px;border-radius:8px;border:1px solid var(--line-strong);background:var(--card);font-size:14px;font-weight:600;cursor:pointer;color:var(--text);transition:background .15s,transform .1s;}
+.btn:hover{background:#eef1f3;}
+.btn:active{transform:scale(0.98);}
 .btn.primary{background:var(--navy);border-color:var(--navy);color:#fff;}
 .btn.primary:hover{background:var(--navy-light);}
 .table-wrap{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;overflow-x:auto;}
