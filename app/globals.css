@@ -1,12 +1,22 @@
 :root{
   --navy:#144a72; --navy-light:#1c6294;
   --accent:#c3d92c; --accent-dark:#7a8a15;
-  --line:#dfe4e8; --line-strong:#c1c9d1; --bg:#f4f7f8; --card:#ffffff;
+  --line:#dfe4e8; --line-strong:#c1c9d1; --bg:#e9f1f4; --card:#ffffff;
   --text:#182430; --text-sub:#5c6b78; --text-faint:#94a3af;
   --danger:#c2492c; --danger-bg:#fbeae5; --ok:#2f6f4e; --ok-bg:#e8f3ec;
 }
 *{box-sizing:border-box;}
-body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--text);}
+body{
+  margin:0;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  color:var(--text);
+  background-color:var(--bg);
+  background-image:url('/court-bg.svg');
+  background-repeat:no-repeat;
+  background-position:top center;
+  background-size:480px 620px;
+  background-attachment:fixed;
+}
 .court-line{height:4px;background:var(--accent);}
 .wrap{max-width:1040px;margin:0 auto;padding:28px 20px 60px;}
 .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:12px;}
