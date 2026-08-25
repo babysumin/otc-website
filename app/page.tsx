@@ -22,7 +22,7 @@ export default function Home() {
   const [statusTab, setStatusTab] = useState<'all' | MemberStatus>('all')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Member | null>(null)
-  const [form, setForm] = useState({ name: '', join_date: '', memo: '', status: 'member' as MemberStatus, gender: '' as 'M' | 'F' | '' })
+  const [form, setForm] = useState({ name: '', join_date: '', status: 'member' as MemberStatus, gender: '' as 'M' | 'F' | '' })
   const [nameErr, setNameErr] = useState(false)
 
   const [intro, setIntro] = useState('')
@@ -84,14 +84,14 @@ export default function Home() {
 
   function openAdd() {
     setEditing(null)
-    setForm({ name: '', join_date: '', memo: '', status: 'member', gender: '' })
+    setForm({ name: '', join_date: '', status: 'member', gender: '' })
     setNameErr(false)
     setModalOpen(true)
   }
 
   function openEdit(m: Member) {
     setEditing(m)
-    setForm({ name: m.name, join_date: m.join_date || '', memo: m.memo || '', status: m.status, gender: m.gender || '' })
+    setForm({ name: m.name, join_date: m.join_date || '', status: m.status, gender: m.gender || '' })
     setNameErr(false)
     setModalOpen(true)
   }
@@ -104,14 +104,13 @@ export default function Home() {
     if (editing) {
       const { error } = await supabase
         .from('members')
-        .update({ name: form.name, join_date: form.join_date, memo: form.memo, status: form.status, gender: form.gender || null })
+        .update({ name: form.name, join_date: form.join_date, status: form.status, gender: form.gender || null })
         .eq('id', editing.id)
       if (!error) fetchMembers()
     } else {
       const { error } = await supabase.from('members').insert({
         name: form.name,
         join_date: form.join_date,
-        memo: form.memo,
         status: form.status,
         gender: form.gender || null,
       })
@@ -217,8 +216,7 @@ export default function Home() {
         <table>
           <thead>
             <tr>
-              <th>이름</th><th>성별</th><th>상태</th><th>가입 시기</th>
-              <th>메모</th><th></th>
+              <th>이름</th><th>성별</th><th>상태</th><th>가입 시기</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -251,7 +249,6 @@ export default function Home() {
                   )}
                 </td>
                 <td>{m.join_date || '-'}</td>
-                <td className="memo-cell" title={m.memo || ''}>{m.memo || '-'}</td>
                 <td>{isAdmin && <button className="icon-btn" onClick={() => openEdit(m)}>⋯</button>}</td>
               </tr>
             ))}
@@ -288,10 +285,6 @@ export default function Home() {
             <div className="field">
               <label>가입 시기</label>
               <input value={form.join_date} onChange={e => setForm({ ...form, join_date: e.target.value })} placeholder="예: 26Q1" />
-            </div>
-            <div className="field">
-              <label>메모</label>
-              <textarea value={form.memo} onChange={e => setForm({ ...form, memo: e.target.value })} placeholder="특이사항 (선택)" />
             </div>
             <div className="modal-actions">
               {editing && <button className="btn" style={{ marginRight: 'auto', color: '#c2492c' }} onClick={deleteMember}>삭제</button>}

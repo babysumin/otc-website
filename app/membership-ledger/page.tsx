@@ -15,7 +15,7 @@ type LedgerRow = {
   sep: number | null; oct: number | null; nov: number | null; dec: number | null
 }
 
-type MemberInfo = { id: string; status: MemberStatus; gender: 'M' | 'F' | null }
+type MemberInfo = { id: string; status: MemberStatus; gender: 'M' | 'F' | null; memo: string | null }
 
 const STATUS_ORDER: Record<string, number> = { member: 0, guest: 1, alumni: 2 }
 
@@ -68,12 +68,19 @@ export default function MembershipLedgerPage() {
   }
 
   async function fetchMemberInfo() {
-    const { data } = await supabase.from('members').select('id, name, status, gender')
+    const { data } = await supabase.from('members').select('id, name, status, gender, memo')
     if (data) {
       const map: Record<string, MemberInfo> = {}
-      data.forEach((m: any) => { map[m.name] = { id: m.id, status: m.status, gender: m.gender } })
+      data.forEach((m: any) => { map[m.name] = { id: m.id, status: m.status, gender: m.gender, memo: m.memo } })
       setMemberMap(map)
     }
+  }
+
+  async function setMemo(memberName: string, memo: string) {
+    const info = memberMap[memberName]
+    if (!info) return
+    setMemberMap(prev => ({ ...prev, [memberName]: { ...prev[memberName], memo } }))
+    await supabase.from('members').update({ memo }).eq('id', info.id)
   }
 
   async function setGender(memberName: string, gender: 'M' | 'F' | '') {
@@ -175,6 +182,7 @@ export default function MembershipLedgerPage() {
               <th colSpan={3} className="quarter-head">3분기</th>
               <th colSpan={3} className="quarter-head">4분기</th>
               <th rowSpan={2}>합계</th>
+              <th rowSpan={2}>메모</th>
             </tr>
             <tr>
               {MONTHS.map(m => <th key={m.key} className="month-subhead">{m.label}</th>)}
@@ -219,6 +227,18 @@ export default function MembershipLedgerPage() {
                     </td>
                   ))}
                   <td className="ledger-total">${rowTotal(r).toLocaleString('en-US')}</td>
+                  <td className="memo-cell-ledger">
+                    {isAdmin ? (
+                      <input
+                        className="ledger-memo-input"
+                        defaultValue={info?.memo || ''}
+                        onBlur={e => setMemo(r.member_name, e.target.value)}
+                        placeholder="메모"
+                      />
+                    ) : (
+                      <span className="memo-cell" title={info?.memo || ''}>{info?.memo || '-'}</span>
+                    )}
+                  </td>
                 </tr>
               )
             })}

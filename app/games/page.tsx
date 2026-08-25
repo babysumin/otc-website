@@ -74,16 +74,34 @@ function tryMatchRound(players: string[], usedPairs: Set<string>, attempts = 300
   return null
 }
 
-function generateRounds(players: string[], games: number): [string, string][][] {
+function generateRoundsFlexible(players: string[], desiredGames: number): { rounds: [string, string][][]; gamesPlayed: Record<string, number> } {
   const usedPairs = new Set<string>()
+  const gamesPlayed: Record<string, number> = {}
+  players.forEach(p => { gamesPlayed[p] = 0 })
   const rounds: [string, string][][] = []
-  for (let g = 0; g < games; g++) {
-    const round = tryMatchRound(players, usedPairs)
-    if (!round) break
+  const byeCount = players.length % 4
+  const maxRounds = desiredGames * 6 + 10
+  let stagnant = 0
+
+  while (Math.min(...Object.values(gamesPlayed)) < desiredGames && rounds.length < maxRounds) {
+    let byePlayers: string[] = []
+    if (byeCount > 0) {
+      const sorted = [...players].sort((a, b) => (gamesPlayed[b] - gamesPlayed[a]) || (Math.random() - 0.5))
+      byePlayers = sorted.slice(0, byeCount)
+    }
+    const playing = players.filter(p => !byePlayers.includes(p))
+    const round = tryMatchRound(playing, usedPairs)
+    if (!round) {
+      stagnant++
+      if (stagnant > 30) break
+      continue
+    }
+    stagnant = 0
     round.forEach(([a, b]) => usedPairs.add(pairKey(a, b)))
+    playing.forEach(p => { gamesPlayed[p]++ })
     rounds.push(round)
   }
-  return rounds
+  return { rounds, gamesPlayed }
 }
 
 function computeStats(matches: MatchRow[]): PlayerStat[] {
@@ -198,19 +216,16 @@ export default function GamesPage() {
       alert('최소 4명 이상 선택해주세요')
       return
     }
-    if (players.length % 4 !== 0) {
-      alert('참가 인원은 4명 단위여야 해요 (현재 ' + players.length + '명)')
-      return
-    }
     const desired = Number(gamesPerPlayer) || 1
-    const maxPossible = players.length - 1
-    const rounds = generateRounds(players, Math.min(desired, maxPossible))
+    const { rounds, gamesPlayed } = generateRoundsFlexible(players, desired)
+    const minGames = Math.min(...Object.values(gamesPlayed))
 
-    if (rounds.length < desired) {
-      setConfirmMsg(`선택하신 인원으로는 1인당 ${desired}경기를 만들 수 없어요. 최대 ${rounds.length}경기까지만 가능합니다. ${rounds.length}경기로 진행할까요?`)
-      setPendingGeneration({ rounds, actualGames: rounds.length })
+    if (minGames < desired) {
+      const byeNote = players.length % 4 !== 0 ? ' (인원이 4명 단위가 아니라 라운드마다 일부는 돌아가며 쉬어요)' : ''
+      setConfirmMsg(`선택하신 인원으로는 1인당 ${desired}경기를 정확히 만들기 어려워요. 최소 ${minGames}경기씩은 보장돼요${byeNote}. 이대로 진행할까요?`)
+      setPendingGeneration({ rounds, actualGames: minGames })
     } else {
-      createSession(rounds, rounds.length)
+      createSession(rounds, desired)
     }
   }
 

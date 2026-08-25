@@ -86,6 +86,18 @@ export default function GalleryPage() {
     fetchItems()
   }
 
+  async function renameEvent(quarter: string, oldEventName: string, newEventName: string) {
+    if (!newEventName.trim() || newEventName === oldEventName) return
+    setItems(prev => prev.map(it => (it.quarter === quarter && it.event === oldEventName) ? { ...it, event: newEventName } : it))
+    const targetQuarter = quarter === UNSPECIFIED_Q ? null : quarter
+    const targetOldEvent = oldEventName === UNSPECIFIED_EVENT ? null : oldEventName
+    let query = supabase.from('gallery_items').update({ event_name: newEventName })
+    query = targetQuarter === null ? query.is('quarter', null) : query.eq('quarter', targetQuarter)
+    query = targetOldEvent === null ? query.is('event_name', null) : query.eq('event_name', targetOldEvent)
+    await query
+    fetchItems()
+  }
+
   async function handleDelete(item: MediaItem) {
     if (!confirm('이 파일을 삭제할까요? 되돌릴 수 없어요.')) return
     await supabase.storage.from('gallery-media').remove([item.path])
@@ -136,7 +148,15 @@ export default function GalleryPage() {
           <h3 className="gallery-quarter-title">{quarter}</h3>
           {events.map(([eventName, eventItems]) => (
             <div key={eventName} className="gallery-event-group">
-              <h4 className="gallery-event-title">{eventName}</h4>
+              {isAdmin ? (
+                <input
+                  className="gallery-event-title-input"
+                  defaultValue={eventName}
+                  onBlur={e => renameEvent(quarter, eventName, e.target.value)}
+                />
+              ) : (
+                <h4 className="gallery-event-title">{eventName}</h4>
+              )}
               <div className="gallery-grid">
                 {eventItems.map(item => (
                   <div key={item.id} className="gallery-item" onClick={() => setPreview(item)}>

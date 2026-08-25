@@ -14,7 +14,7 @@ body{
   background-image:url('/court-bg.svg');
   background-repeat:no-repeat;
   background-position:top center;
-  background-size:480px 620px;
+  background-size:auto 100vh;
   background-attachment:fixed;
 }
 .court-line{height:4px;background:var(--accent);}
@@ -66,6 +66,8 @@ body{
 .gallery-quarter-title{font-size:15px;font-weight:700;margin:0 0 12px;color:var(--navy);padding-bottom:6px;border-bottom:2px solid var(--accent);}
 .gallery-event-group{margin-bottom:16px;}
 .gallery-event-title{font-size:13px;font-weight:600;margin:0 0 8px;color:var(--text-sub);}
+.gallery-event-title-input{font-size:13px;font-weight:600;color:var(--text-sub);border:1px solid transparent;background:transparent;padding:2px 6px;margin:0 0 8px;border-radius:6px;width:220px;}
+.gallery-event-title-input:hover,.gallery-event-title-input:focus{border-color:var(--line-strong);background:var(--card);outline:none;}
 .upload-hint{font-size:12.5px;color:var(--text-sub);margin:-4px 0 4px;}
 .quarter-head{text-align:center !important;border-left:1px solid var(--line);}
 .month-subhead{text-align:center !important;font-size:10.5px !important;}
@@ -119,6 +121,8 @@ body{
 .ledger-cell-input{width:52px;height:28px;border:1px solid var(--line-strong);border-radius:6px;text-align:center;font-size:12px;padding:0 2px;}
 .ledger-cell-view{font-size:12.5px;color:var(--text-sub);}
 .ledger-total{font-weight:700;color:var(--navy);white-space:nowrap;}
+.ledger-memo-input{width:120px;height:28px;border:1px solid var(--line-strong);border-radius:6px;font-size:12px;padding:0 8px;}
+.memo-cell-ledger{max-width:140px;}
 .gender-icon{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:5px;color:#fff;font-size:12px;font-weight:700;}
 .gender-select{height:26px;border-radius:6px;border:1px solid var(--line-strong);font-size:12px;padding:0 4px;background:var(--card);}
 .status-select{height:26px;border-radius:6px;border:1px solid transparent;font-size:12px;font-weight:600;padding:0 6px;cursor:pointer;}
