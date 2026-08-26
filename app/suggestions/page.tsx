@@ -37,11 +37,18 @@ export default function SuggestionsPage() {
   async function submit() {
     if (!content.trim()) return
     setSubmitting(true)
-    const { error } = await supabase.from('suggestions').insert({ content: content.trim() })
+    const trimmed = content.trim()
+    const { error } = await supabase.from('suggestions').insert({ content: trimmed })
     if (!error) {
       setContent('')
       setSubmitted(true)
       setTimeout(() => setSubmitted(false), 3000)
+      // 이메일 알림은 실패해도 사용자 경험에 영향 없도록 조용히 시도
+      fetch('/api/notify-suggestion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: trimmed }),
+      }).catch(() => {})
     }
     setSubmitting(false)
   }
@@ -67,9 +74,9 @@ export default function SuggestionsPage() {
       <div className="wrap">
         <TopNav />
         <div className="section-header">
-          <h2 className="section-title">익명 마음의 소리</h2>
+          <h2 className="section-title">마음의 소리</h2>
         </div>
-        <MemberGate title="익명 마음의 소리" pwInput={pwInput} setPwInput={setPwInput} pwErr={pwErr} checkPassword={checkPassword} />
+        <MemberGate title="마음의 소리" pwInput={pwInput} setPwInput={setPwInput} pwErr={pwErr} checkPassword={checkPassword} />
       </div>
     )
   }
@@ -79,7 +86,7 @@ export default function SuggestionsPage() {
       <TopNav />
 
       <div className="section-header">
-        <h2 className="section-title">익명 마음의 소리</h2>
+        <h2 className="section-title">마음의 소리</h2>
       </div>
 
       <div className="match-info-box">

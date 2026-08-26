@@ -14,7 +14,7 @@ const NAV_ITEMS = [
   { href: '/members', label: '회원', access: 'member' as const },
   { href: '/account', label: '장부', access: 'member' as const },
   { href: '/games', label: '경기', access: 'member' as const },
-  { href: '/suggestions', label: '익명 마음의 소리', access: 'member' as const },
+  { href: '/suggestions', label: '마음의 소리', access: 'member' as const },
   { href: '/membership-ledger', label: '멤버십 장부', access: 'admin' as const },
 ]
 
@@ -100,14 +100,6 @@ export default function TopNav() {
           </div>
         </Link>
         <div className="header-actions">
-          <Link href="/" className={`tab ${pathname === '/' ? 'active' : ''}`}>
-            {pathname === '/' && <TennisBallIcon />}
-            홈
-          </Link>
-          <Link href="/gallery" className={`tab ${pathname === '/gallery' ? 'active' : ''}`}>
-            {pathname === '/gallery' && <TennisBallIcon />}
-            사진·동영상
-          </Link>
           <button className="btn icon-only-btn" onClick={() => setSearchOpen(true)} title="통합 검색">🔍</button>
           <button className="btn nav-menu-btn" onClick={() => setNavMenuOpen(true)}>☰ 메뉴</button>
           {isAdmin ? (
