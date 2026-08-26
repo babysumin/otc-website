@@ -158,7 +158,7 @@ function MembershipLedgerPageInner() {
       </div>
 
       <div className="stats">
-        <div className="stat"><div className="label">인원</div><div className="value">{filtered.length}명</div></div>
+        <div className="stat"><div className="label">정회원 수</div><div className="value">{filtered.filter(r => effectiveStatus(r) === 'member').length}명</div></div>
         <div className="stat"><div className="label">총 납부액</div><div className="value">${grandTotal.toLocaleString('en-US')}</div></div>
       </div>
 

@@ -406,6 +406,47 @@ function computeQuarterSkillMap(sessions: SessionRow[], allMatches: MatchRow[], 
   return skillMap
 }
 
+// 이전 분기 라벨 계산 (예: 26Q3 -> 26Q2, 26Q1 -> 25Q4)
+function previousQuarterLabel(q: string): string {
+  const yy = Number(q.slice(0, 2))
+  const qn = Number(q.slice(3))
+  if (qn > 1) return `${String(yy).padStart(2, '0')}Q${qn - 1}`
+  return `${String(yy - 1).padStart(2, '0')}Q4`
+}
+
+// 시드 배정(약자 보호)용: 승점이 아니라 "승률" 기준으로 이번 분기 최약체를 판단
+// 이번 분기 기록이 없으면 전 분기 기록을 참고하고, 전 분기도 없으면 평균으로 중간 배치
+function computeQuarterWinRateMap(sessions: SessionRow[], allMatches: MatchRow[], selectedPlayers: string[]): Record<string, number> {
+  const now = new Date()
+  const yy = String(now.getFullYear()).slice(2)
+  const currentQ = `${yy}Q${Math.floor(now.getMonth() / 3) + 1}`
+  const prevQ = previousQuarterLabel(currentQ)
+
+  function winRateForQuarter(q: string): Record<string, number> {
+    const sessionIds = new Set(sessions.filter(s => quarterLabel(s.session_date) === q).map(s => s.id))
+    const matches = allMatches.filter(m => m.session_id && sessionIds.has(m.session_id))
+    const stats = computeStats(matches)
+    const map: Record<string, number> = {}
+    stats.forEach(s => { if (s.games > 0) map[s.name] = (s.wins + s.draws * 0.5) / s.games })
+    return map
+  }
+
+  const currentRates = winRateForQuarter(currentQ)
+  const prevRates = winRateForQuarter(prevQ)
+
+  const rateMap: Record<string, number> = {}
+  selectedPlayers.forEach(p => {
+    if (currentRates[p] != null) rateMap[p] = currentRates[p]
+    else if (prevRates[p] != null) rateMap[p] = prevRates[p]
+  })
+
+  // 이번 분기도, 전 분기도 기록이 없는 선수는 "판단 불가"이므로 평균 승률로 중간 배치 (약자로도 강자로도 취급 안 함)
+  const knownRates = Object.values(rateMap)
+  const avgRate = knownRates.length > 0 ? knownRates.reduce((a, b) => a + b, 0) / knownRates.length : 0.5
+  selectedPlayers.forEach(p => { if (rateMap[p] == null) rateMap[p] = avgRate })
+  return rateMap
+}
+
 function GamesPageInner() {
   const { isAdmin } = useAuth()
   const { isMember, pwInput, setPwInput, pwErr, checkPassword } = useMemberAuth()
@@ -488,9 +529,9 @@ function GamesPageInner() {
     const useHanwool = players.length >= 5 && players.length <= 16
 
     if (useHanwool) {
-      const skillMap = computeQuarterSkillMap(sessions, allMatches, players)
+      const winRateMap = computeQuarterWinRateMap(sessions, allMatches, players)
       const { partnerFreq } = computeQuarterFrequencies(sessions, allMatches)
-      const seeded = assignHanwoolSeeds(players, skillMap, genderMap, partnerFreq)
+      const seeded = assignHanwoolSeeds(players, winRateMap, genderMap, partnerFreq)
       const protectedCount = (PROTECTED_SEATS[seeded.length] || []).length
       setSeedPreview({ seeded, genderMap, protectedCount })
       return

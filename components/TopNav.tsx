@@ -136,14 +136,14 @@ export default function TopNav() {
 
       {searchOpen && (
         <div className="modal-overlay show" onClick={e => { if (e.target === e.currentTarget) setSearchOpen(false) }}>
-          <div className="modal">
+          <div className="modal modal-wide">
             <h2>통합 검색</h2>
             <div className="field">
               <input
                 autoFocus
                 value={searchQuery}
                 onChange={e => { setSearchQuery(e.target.value); runGlobalSearch(e.target.value) }}
-                placeholder="이름으로 검색 (회원/장부/경기 통합)"
+                placeholder="search"
               />
             </div>
             {searching && <p className="upload-hint">검색 중...</p>}
