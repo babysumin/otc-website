@@ -92,7 +92,7 @@ function buildGameParticipation(n: number, schedule: Array<[[number, number], [n
 
 // '시드 우선 배정' 규칙: 인원수별로, 실력이 가장 낮은 선수들을 우선 배정할 "보호 시드" 번호
 // (원본 표의 안내: 실력 차이 나는 소수끼리 파트너가 되는 걸 피하고 싶을 때 사용하는 자리)
-const PROTECTED_SEATS: Record<number, number[]> = {
+export const PROTECTED_SEATS: Record<number, number[]> = {
   6: [1, 3],
   7: [1, 5],
   8: [1, 7],

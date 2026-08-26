@@ -63,9 +63,9 @@ export default function Home() {
       </div>
 
       <div className="intro-box">
-        <p className="intro-subtitle">소개글</p>
         {introEditing ? (
-          <>
+          <div className="intro-view">
+            <p className="intro-subtitle">소개글</p>
             {photoDraft && (
               <div className="intro-photo-wrap">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -90,9 +90,10 @@ export default function Home() {
               <button className="btn" onClick={() => setIntroEditing(false)}>취소</button>
               <button className="btn primary" onClick={saveIntro}>저장</button>
             </div>
-          </>
+          </div>
         ) : (
           <div className={`intro-view ${isAdmin ? '' : 'no-edit'}`} onClick={() => { if (isAdmin) { setIntroDraft(intro); setPhotoDraft(photoUrl); setIntroEditing(true) } }}>
+            <p className="intro-subtitle">소개글</p>
             {photoUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={photoUrl} alt="소개 사진" className="intro-photo" />

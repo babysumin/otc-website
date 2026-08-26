@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { supabase, Member } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 import { useMemberAuth } from '@/lib/useMemberAuth'
-import { getHanwoolSchedule, maxHanwoolGames, buildHanwoolMatches, assignHanwoolSeeds } from '@/lib/hanwoolTable'
+import { getHanwoolSchedule, maxHanwoolGames, buildHanwoolMatches, assignHanwoolSeeds, PROTECTED_SEATS } from '@/lib/hanwoolTable'
 import TopNav from '@/components/TopNav'
 import MemberGate from '@/components/MemberGate'
 
@@ -433,6 +433,7 @@ function GamesPageInner() {
   const [addMatchOpen, setAddMatchOpen] = useState(false)
   const [addMatchForm, setAddMatchForm] = useState({ round: '1', p1: '', p2: '', p3: '', p4: '' })
   const [finalizeMsg, setFinalizeMsg] = useState<string | null>(null)
+  const [seedPreview, setSeedPreview] = useState<{ seeded: string[]; genderMap: Record<string, 'M' | 'F' | null>; protectedCount: number } | null>(null)
 
   useEffect(() => {
     fetchMembers()
@@ -490,8 +491,8 @@ function GamesPageInner() {
       const skillMap = computeQuarterSkillMap(sessions, allMatches, players)
       const { partnerFreq } = computeQuarterFrequencies(sessions, allMatches)
       const seeded = assignHanwoolSeeds(players, skillMap, genderMap, partnerFreq)
-      const maxGames = maxHanwoolGames(seeded.length)
-      createHanwoolSession(seeded, maxGames)
+      const protectedCount = (PROTECTED_SEATS[seeded.length] || []).length
+      setSeedPreview({ seeded, genderMap, protectedCount })
       return
     }
 
@@ -516,15 +517,25 @@ function GamesPageInner() {
     const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
     const title = sessionTitle.trim() || `${dateStr} 대회 ${groupLabel}`
 
+    const matches = buildHanwoolMatches(seededPlayers, desiredGames)
+
+    // desiredGames는 "총 라운드 수"일 뿐, 실제 인당 게임수는 매치 내역에서 직접 세야 정확함 (5~13명: 보통 4, 14~16명: 3~5 편차)
+    const gameCounts: Record<string, number> = {}
+    seededPlayers.forEach(p => { gameCounts[p] = 0 })
+    matches.forEach(m => { [...m.team1, ...m.team2].forEach(p => { gameCounts[p] = (gameCounts[p] || 0) + 1 }) })
+    const counts = Object.values(gameCounts)
+    const countFreq: Record<number, number> = {}
+    counts.forEach(c => { countFreq[c] = (countFreq[c] || 0) + 1 })
+    const perPlayerGames = Number(Object.entries(countFreq).sort((a, b) => b[1] - a[1])[0]?.[0] || desiredGames)
+
     const { data: session, error } = await supabase
       .from('match_sessions')
-      .insert({ title, session_date: dateStr, group_label: groupLabel, games_per_player: desiredGames, end_score: Number(endScore) })
+      .insert({ title, session_date: dateStr, group_label: groupLabel, games_per_player: perPlayerGames, end_score: Number(endScore) })
       .select()
       .single()
 
     if (error || !session) return
 
-    const matches = buildHanwoolMatches(seededPlayers, desiredGames)
     const matchRows = matches.map((m, idx) => ({
       session_id: session.id,
       round_no: idx + 1,
@@ -878,6 +889,58 @@ function GamesPageInner() {
           </div>
 
           <button className="btn primary" onClick={attemptGenerate}>대회 생성</button>
+
+          {seedPreview && (
+            <div className="modal-overlay show" onClick={e => { if (e.target === e.currentTarget) setSeedPreview(null) }}>
+              <div className="modal">
+                <h2>시드 확인</h2>
+                <p style={{ fontSize: 13, color: 'var(--text-sub)', marginBottom: 12 }}>
+                  이번 분기 최하위 성적자 {seedPreview.protectedCount}명이 보호 시드에 배정됐어요. 필요하면 시드를 서로 바꿔보세요 (드롭다운으로 자리를 맞바꿀 수 있어요).
+                </p>
+                <div className="seed-preview-grid">
+                  {seedPreview.seeded.map((name, idx) => {
+                    const seatNum = idx + 1
+                    const seatLabel = seatNum <= 9 ? String(seatNum) : String.fromCharCode(65 + seatNum - 10)
+                    const isProtected = idx < seedPreview.protectedCount
+                    return (
+                      <div key={idx} className={`seed-preview-item ${isProtected ? 'protected' : ''}`}>
+                        <span className="seed-preview-num">시드{seatLabel}</span>
+                        <select
+                          value={name}
+                          onChange={e => {
+                            const newName = e.target.value
+                            const otherIdx = seedPreview.seeded.indexOf(newName)
+                            const nextSeeded = [...seedPreview.seeded]
+                            nextSeeded[idx] = newName
+                            nextSeeded[otherIdx] = name
+                            setSeedPreview({ ...seedPreview, seeded: nextSeeded })
+                          }}
+                        >
+                          {seedPreview.seeded.map(p => (
+                            <option key={p} value={p}>{p}{seedPreview.genderMap[p] === 'F' ? ' (여)' : ''}</option>
+                          ))}
+                        </select>
+                        {isProtected && <span className="seed-preview-tag">보호</span>}
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="modal-actions">
+                  <button className="btn" onClick={() => setSeedPreview(null)}>취소</button>
+                  <button
+                    className="btn primary"
+                    onClick={() => {
+                      const maxGames = maxHanwoolGames(seedPreview.seeded.length)
+                      createHanwoolSession(seedPreview.seeded, maxGames)
+                      setSeedPreview(null)
+                    }}
+                  >
+                    이대로 대회 생성
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {confirmMsg && pendingGeneration && (
             <div className="modal-overlay show" onClick={e => { if (e.target === e.currentTarget) { setConfirmMsg(null); setPendingGeneration(null) } }}>

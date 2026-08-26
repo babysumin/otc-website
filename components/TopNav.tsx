@@ -7,16 +7,22 @@ import { useAuth } from '@/lib/useAuth'
 import { supabase } from '@/lib/supabase'
 
 const NAV_ITEMS = [
-  { href: '/', label: '홈' },
-  { href: '/gallery', label: '사진·동영상' },
-  { href: '/members', label: '회원' },
-  { href: '/account', label: '장부' },
-  { href: '/membership-ledger', label: '멤버십 장부' },
-  { href: '/games', label: '경기' },
-  { href: '/policy', label: '모임규정' },
-  { href: '/etiquette', label: '테니스 에티켓' },
-  { href: '/suggestions', label: '익명 마음의 소리' },
+  { href: '/', label: '홈', access: 'public' as const },
+  { href: '/gallery', label: '사진·동영상', access: 'public' as const },
+  { href: '/policy', label: '모임규정', access: 'public' as const },
+  { href: '/etiquette', label: '테니스 에티켓', access: 'public' as const },
+  { href: '/members', label: '회원', access: 'member' as const },
+  { href: '/account', label: '장부', access: 'member' as const },
+  { href: '/games', label: '경기', access: 'member' as const },
+  { href: '/suggestions', label: '익명 마음의 소리', access: 'member' as const },
+  { href: '/membership-ledger', label: '멤버십 장부', access: 'admin' as const },
 ]
+
+const ACCESS_LABEL: Record<string, string> = {
+  public: 'public',
+  member: 'member only',
+  admin: 'admin only',
+}
 
 function TennisBallIcon() {
   return (
@@ -125,6 +131,7 @@ export default function TopNav() {
                   onClick={() => setNavMenuOpen(false)}
                 >
                   <span>{pathname === item.href ? '● ' : ''}{item.label}</span>
+                  <span className="nav-access-label">{ACCESS_LABEL[item.access]}</span>
                 </Link>
               ))}
             </div>

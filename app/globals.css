@@ -34,6 +34,14 @@ tbody td{white-space:nowrap;}
 .officer-star.readonly{cursor:default;}
 .intro-view.no-edit{cursor:default;}
 .brand{display:flex;align-items:center;gap:16px;text-decoration:none;}
+.brand,.brand:visited,.brand:link,.brand:hover,.brand:active{color:var(--navy);}
+.nav-access-label{font-size:11px;color:var(--text-faint);font-weight:400;text-transform:none;}
+.seed-preview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;max-height:340px;overflow-y:auto;margin-bottom:8px;}
+.seed-preview-item{display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;}
+.seed-preview-item.protected{border-color:var(--accent);background:#fbfde9;}
+.seed-preview-num{font-size:11px;font-weight:700;color:var(--navy);white-space:nowrap;}
+.seed-preview-item select{flex:1;font-size:12px;border:none;background:transparent;min-width:0;}
+.seed-preview-tag{font-size:10px;background:var(--accent);color:var(--navy);border-radius:4px;padding:1px 5px;font-weight:700;white-space:nowrap;}
 .brand .mark{width:56px;height:56px;border-radius:14px;background:var(--navy);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:18px;}
 .brand .mark-img{width:56px;height:56px;border-radius:14px;object-fit:cover;}
 .intro-box{margin-bottom:20px;}
@@ -67,7 +75,7 @@ tbody tr:hover .sticky-col-body{background:#fafbfc;}
 .intro-photo-wrap{position:relative;margin-bottom:10px;}
 .intro-photo-remove{position:absolute;top:8px;right:8px;height:28px;padding:0 10px;font-size:12px;background:rgba(0,0,0,0.55);color:#fff;border-color:transparent;}
 .intro-uploading{font-size:12px;color:var(--text-sub);margin:6px 0 0;}
-.brand h1{font-size:26px;margin:0;font-weight:800;letter-spacing:-0.3px;}
+.brand h1{font-size:26px;margin:0;font-weight:800;letter-spacing:-0.3px;color:var(--navy);}
 .brand p{margin:2px 0 0;font-size:15px;color:var(--text-sub);font-weight:600;}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px;}
 .tabs{display:flex;gap:6px;margin-bottom:24px;border-bottom:1px solid var(--line);padding-bottom:0;}
