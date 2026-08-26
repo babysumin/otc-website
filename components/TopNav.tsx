@@ -100,7 +100,12 @@ export default function TopNav() {
           </div>
         </Link>
         <div className="header-actions">
-          <button className="btn icon-only-btn" onClick={() => setSearchOpen(true)} title="통합 검색">🔍</button>
+          <input
+            className="header-search-input"
+            placeholder="search"
+            onFocus={() => setSearchOpen(true)}
+            readOnly
+          />
           <button className="btn nav-menu-btn" onClick={() => setNavMenuOpen(true)}>☰ 메뉴</button>
           {isAdmin ? (
             <button className="btn" onClick={handleLogout}>로그아웃</button>

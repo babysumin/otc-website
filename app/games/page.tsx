@@ -474,7 +474,7 @@ function GamesPageInner() {
   const [addMatchOpen, setAddMatchOpen] = useState(false)
   const [addMatchForm, setAddMatchForm] = useState({ round: '1', p1: '', p2: '', p3: '', p4: '' })
   const [finalizeMsg, setFinalizeMsg] = useState<string | null>(null)
-  const [seedPreview, setSeedPreview] = useState<{ seeded: string[]; genderMap: Record<string, 'M' | 'F' | null>; protectedCount: number } | null>(null)
+  const [seedPreview, setSeedPreview] = useState<{ seeded: string[]; genderMap: Record<string, 'M' | 'F' | null>; protectedCount: number; protectedSeats: number[] } | null>(null)
 
   useEffect(() => {
     fetchMembers()
@@ -532,8 +532,8 @@ function GamesPageInner() {
       const winRateMap = computeQuarterWinRateMap(sessions, allMatches, players)
       const { partnerFreq } = computeQuarterFrequencies(sessions, allMatches)
       const seeded = assignHanwoolSeeds(players, winRateMap, genderMap, partnerFreq)
-      const protectedCount = (PROTECTED_SEATS[seeded.length] || []).length
-      setSeedPreview({ seeded, genderMap, protectedCount })
+      const protectedSeats = PROTECTED_SEATS[seeded.length] || []
+      setSeedPreview({ seeded, genderMap, protectedCount: protectedSeats.length, protectedSeats })
       return
     }
 
@@ -942,7 +942,7 @@ function GamesPageInner() {
                   {seedPreview.seeded.map((name, idx) => {
                     const seatNum = idx + 1
                     const seatLabel = seatNum <= 9 ? String(seatNum) : String.fromCharCode(65 + seatNum - 10)
-                    const isProtected = idx < seedPreview.protectedCount
+                    const isProtected = seedPreview.protectedSeats.includes(seatNum)
                     return (
                       <div key={idx} className={`seed-preview-item ${isProtected ? 'protected' : ''}`}>
                         <span className="seed-preview-num">시드{seatLabel}</span>
