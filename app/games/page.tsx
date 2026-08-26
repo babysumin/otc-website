@@ -611,7 +611,6 @@ function GamesPageInner() {
     return Array.from(map.entries()).sort((a, b) => a[0] - b[0])
   }, [activeMatches])
   const activeStats = useMemo(() => computeStats(activeMatches), [activeMatches])
-  const [rankingGroupFilter, setRankingGroupFilter] = useState<'all' | 'A' | 'B'>('all')
 
   // 1번: 대회 생성시 이미 지정한 조(A조/B조) 정보를 그대로 분석해서 자동으로 그룹별 랭킹 분리
   const sessionGroupMap = useMemo(() => {
@@ -620,18 +619,13 @@ function GamesPageInner() {
     return map
   }, [sessions])
 
-  function matchInGroup(m: MatchRow, group: 'all' | 'A' | 'B') {
-    if (group === 'all') return true
-    if (!m.session_id) return false
-    return sessionGroupMap[m.session_id] === group
-  }
-
-  const groupFilteredMatches = useMemo(() => allMatches.filter(m => matchInGroup(m, rankingGroupFilter)), [allMatches, rankingGroupFilter, sessionGroupMap])
-
-  const overallStats = useMemo(() => computeStats(groupFilteredMatches), [groupFilteredMatches])
-  const eventCounts = useMemo(() => computeEventCounts(groupFilteredMatches), [groupFilteredMatches])
+  const eventCounts = useMemo(() => computeEventCounts(allMatches), [allMatches])
+  // 개인별 전적(10번) 조회용 - 표에는 안 보이고 선수 상세 페이지 계산용으로만 사용
+  const overallStats = useMemo(() => computeStats(allMatches), [allMatches])
   const [collapsedQuarters, setCollapsedQuarters] = useState<Set<string>>(new Set())
   const [collapsedRankingQuarters, setCollapsedRankingQuarters] = useState<Set<string>>(new Set())
+  // 분기마다 독립적으로 전체/A그룹/B그룹 필터를 기억
+  const [quarterGroupFilter, setQuarterGroupFilter] = useState<Record<string, 'all' | 'A' | 'B'>>({})
 
   function toggleQuarterCollapse(quarter: string) {
     setCollapsedQuarters(prev => {
@@ -651,30 +645,40 @@ function GamesPageInner() {
     })
   }
 
-  // 1번: 랭킹을 분기별로 나눠서 계산 (세션 날짜 기준 분기 자동 판별)
+  // 1번: 랭킹을 분기별로 나눠서 계산 (세션 날짜 기준 분기 자동 판별). 그룹 필터링은 하지 않고 원본 매치를 그대로 분기별로 묶어둠
   const sessionQuarterMap = useMemo(() => {
     const map: Record<string, string> = {}
     sessions.forEach(s => { map[s.id] = quarterLabel(s.session_date) })
     return map
   }, [sessions])
 
-  const rankingByQuarter = useMemo(() => {
+  const matchesByQuarter = useMemo(() => {
     const groups: Record<string, MatchRow[]> = {}
-    groupFilteredMatches.forEach(m => {
+    allMatches.forEach(m => {
       if (!m.session_id) return
       const q = sessionQuarterMap[m.session_id]
       if (!q) return
       if (!groups[q]) groups[q] = []
       groups[q].push(m)
     })
-    return Object.entries(groups)
-      .map(([quarter, matches]) => ({
-        quarter,
-        stats: computeStats(matches),
-        eventCounts: computeEventCounts(matches),
-      }))
-      .sort((a, b) => b.quarter.localeCompare(a.quarter))
+    return groups
   }, [allMatches, sessionQuarterMap])
+
+  // 각 분기마다, 그 분기에 저장된 필터값으로 걸러서 통계 계산
+  const rankingByQuarter = useMemo(() => {
+    return Object.entries(matchesByQuarter)
+      .map(([quarter, matches]) => {
+        const filter = quarterGroupFilter[quarter] || 'all'
+        const filtered = filter === 'all' ? matches : matches.filter(m => m.session_id && sessionGroupMap[m.session_id] === filter)
+        return {
+          quarter,
+          filter,
+          stats: computeStats(filtered),
+          eventCounts: computeEventCounts(filtered),
+        }
+      })
+      .sort((a, b) => b.quarter.localeCompare(a.quarter))
+  }, [matchesByQuarter, quarterGroupFilter, sessionGroupMap])
 
   // 10번: 개인별 전적
   const playerMatches = selectedPlayer
@@ -931,22 +935,11 @@ function GamesPageInner() {
 
       {tab === 'ranking' && !selectedPlayer && (
         <>
-          <p className="ranking-note">승리 +{WIN_POINTS}P / 무승부 +{DRAW_POINTS}P / 패배 +{LOSE_POINTS}P 기준으로 계산돼요. 이름을 클릭하면 개인별 전적을 볼 수 있어요.</p>
-
-          <div className="toolbar">
-            <select value={rankingGroupFilter} onChange={e => setRankingGroupFilter(e.target.value as 'all' | 'A' | 'B')}>
-              <option value="all">전체 (A+B 그룹 모두)</option>
-              <option value="A">A그룹만</option>
-              <option value="B">B그룹만</option>
-            </select>
-          </div>
-          {rankingGroupFilter !== 'all' && (
-            <p className="upload-hint">대회 생성할 때 지정한 조(A조/B조) 기준으로 자동 분류돼요.</p>
-          )}
+          <p className="ranking-note">승리 +{WIN_POINTS}P / 무승부 +{DRAW_POINTS}P / 패배 +{LOSE_POINTS}P 기준으로 계산돼요. 이름을 클릭하면 개인별 전적을 볼 수 있어요. 분기별로 A그룹/B그룹을 따로 필터링해서 볼 수 있어요.</p>
 
           <h3 className="subsection-title">분기별 랭킹</h3>
           {rankingByQuarter.length === 0 && <div className="empty">아직 분기별 데이터가 없어요.</div>}
-          {rankingByQuarter.map(({ quarter, stats, eventCounts: qEventCounts }) => {
+          {rankingByQuarter.map(({ quarter, filter, stats, eventCounts: qEventCounts }) => {
             const collapsed = collapsedRankingQuarters.has(quarter)
             return (
               <div key={quarter} className="quarter-session-group">
@@ -956,31 +949,44 @@ function GamesPageInner() {
                   <span className="quarter-toggle-count">{stats.length}명 참가</span>
                 </button>
                 {!collapsed && (
-                  <div className="table-wrap" style={{ marginTop: 12 }}>
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>순위</th><th>이름</th><th>경기수</th><th>승</th><th>무</th><th>패</th><th>승률</th><th>승점</th><th>득실</th><th>이벤트 참가</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {stats.map((s, i) => (
-                          <tr key={s.name}>
-                            <td className="rank-num">{i + 1}</td>
-                            <td className="name-cell player-name-link" onClick={() => setSelectedPlayer(s.name)}>{s.name}</td>
-                            <td>{s.games}</td>
-                            <td>{s.wins}</td>
-                            <td>{s.draws}</td>
-                            <td>{s.losses}</td>
-                            <td>{s.games > 0 ? `${((s.wins / s.games) * 100).toFixed(1)}%` : '-'}</td>
-                            <td className="ledger-total">{s.points}P</td>
-                            <td>{s.diff > 0 ? `+${s.diff}` : s.diff}</td>
-                            <td>{qEventCounts[s.name] || 0}회</td>
+                  <>
+                    <div className="toolbar" style={{ marginTop: 12 }}>
+                      <select
+                        value={filter}
+                        onChange={e => setQuarterGroupFilter(prev => ({ ...prev, [quarter]: e.target.value as 'all' | 'A' | 'B' }))}
+                      >
+                        <option value="all">전체 (A+B 그룹 모두)</option>
+                        <option value="A">A그룹만</option>
+                        <option value="B">B그룹만</option>
+                      </select>
+                    </div>
+                    <div className="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>순위</th><th>이름</th><th>경기수</th><th>승</th><th>무</th><th>패</th><th>승률</th><th>승점</th><th>득실</th><th>이벤트 참가</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {stats.map((s, i) => (
+                            <tr key={s.name}>
+                              <td className="rank-num">{i + 1}</td>
+                              <td className="name-cell player-name-link" onClick={() => setSelectedPlayer(s.name)}>{s.name}</td>
+                              <td>{s.games}</td>
+                              <td>{s.wins}</td>
+                              <td>{s.draws}</td>
+                              <td>{s.losses}</td>
+                              <td>{s.games > 0 ? `${((s.wins / s.games) * 100).toFixed(1)}%` : '-'}</td>
+                              <td className="ledger-total">{s.points}P</td>
+                              <td>{s.diff > 0 ? `+${s.diff}` : s.diff}</td>
+                              <td>{qEventCounts[s.name] || 0}회</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {stats.length === 0 && <div className="empty">이 필터로는 데이터가 없어요.</div>}
+                    </div>
+                  </>
                 )}
               </div>
             )
