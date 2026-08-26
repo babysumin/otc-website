@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { supabase, Member } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 import { useMemberAuth } from '@/lib/useMemberAuth'
-import { getHanwoolSchedule, maxHanwoolGames, buildHanwoolMatches, optimizeHanwoolSeedingForGender } from '@/lib/hanwoolTable'
+import { getHanwoolSchedule, maxHanwoolGames, buildHanwoolMatches } from '@/lib/hanwoolTable'
 import TopNav from '@/components/TopNav'
 import MemberGate from '@/components/MemberGate'
 
@@ -113,8 +113,8 @@ function balancedRoundAttempt(
   for (let attempt = 0; attempt < attempts; attempt++) {
     // 평균보다 압도적으로 많이 만난 조합이면 override. 시도가 늘어날수록 기준을 조금씩 완화해서 결국 성립되도록 함
     const overrideThreshold = avg + 1 + Math.floor(attempt / 80)
-    // 마지막 10% 시도까지는 여자+여자 페어를 최대한 피함 (여복이 아닌 상황에서)
-    const avoidFemalePairs = !!genderMap && attempt < attempts * 0.9
+    // 여자+여자 페어는 거의 항상 강제로 피함. 정말 마지막 몇 번만 예외 허용 (수학적으로 불가능한 극히 드문 경우 대비)
+    const avoidFemalePairs = !!genderMap && attempt < attempts * 0.97
     const jittered = players.map(p => ({ p, score: (skillMap[p] || 0) + (Math.random() - 0.5) * JITTER }))
     jittered.sort((a, b) => b.score - a.score)
     const sorted = jittered.map(x => x.p)
@@ -146,14 +146,30 @@ function balancedRoundAttempt(
 function groupPairsIntoBalancedMatches(
   pairs: [string, string][],
   skillMap: Record<string, number>,
-  oppFreq: Record<string, number>
+  oppFreq: Record<string, number>,
+  genderMap?: Record<string, 'M' | 'F' | null>
 ): [string, string][] {
-  const withScore = pairs.map(pair => ({
-    pair,
-    score: (skillMap[pair[0]] || 0) + (skillMap[pair[1]] || 0),
-  }))
-  withScore.sort((a, b) => b.score - a.score)
-  const ordered = withScore.map(x => x.pair)
+  const skillSort = (list: [string, string][]) => {
+    const withScore = list.map(pair => ({ pair, score: (skillMap[pair[0]] || 0) + (skillMap[pair[1]] || 0) }))
+    withScore.sort((a, b) => b.score - a.score)
+    return withScore.map(x => x.pair)
+  }
+
+  let ordered: [string, string][]
+  if (genderMap) {
+    // 혼복(남+여) 페어끼리 먼저 묶어서 서로 매칭시키고, 나머지(남남/여여)는 따로 묶음
+    // -> 혼복 페어가 짝수개면 모든 매치가 "혼복 vs 혼복"으로 완벽히 맞춰짐
+    const isMix = (p: [string, string]) => genderMap[p[0]] === 'F' !== (genderMap[p[1]] === 'F')
+    const mixPairs = skillSort(pairs.filter(isMix))
+    const otherPairs = skillSort(pairs.filter(p => !isMix(p)))
+    if (mixPairs.length % 2 !== 0) {
+      // 혼복 페어가 홀수개면 하나는 어쩔 수 없이 other 쪽으로 넘김
+      otherPairs.push(mixPairs.pop()!)
+    }
+    ordered = [...mixPairs, ...otherPairs]
+  } else {
+    ordered = skillSort(pairs)
+  }
 
   function oppFreqOf(p1: [string, string], p2: [string, string]) {
     let sum = 0
@@ -463,25 +479,21 @@ function GamesPageInner() {
       return
     }
 
-    // 매칭 방식은 자동으로 통합 판별: 5~16명이면 한울 AA 공식표, 그 외(4명 또는 17명 이상)는 우리 자동 밸런스 방식
-    const useHanwool = players.length >= 5 && players.length <= 16
+    const genderMap: Record<string, 'M' | 'F' | null> = {}
+    members.forEach(m => { genderMap[m.name] = m.gender })
+    const hasFemale = players.some(p => genderMap[p] === 'F')
+
+    // 여성이 없으면 검증된 한울 AA 공식표(5~16명), 여성이 있으면 성별 우선순위를 완전히 반영할 수 있는 자체 커스텀 엔진 사용
+    const useHanwool = !hasFemale && players.length >= 5 && players.length <= 16
 
     if (useHanwool) {
-      const genderMap: Record<string, 'M' | 'F' | null> = {}
-      members.forEach(m => { genderMap[m.name] = m.gender })
       const skillMap = computeQuarterSkillMap(sessions, allMatches, players)
-      // 시드1 = 가장 잘하는 사람 순으로 정렬해서 표에 대입
       const skillSorted = [...players].sort((a, b) => (skillMap[b] || 0) - (skillMap[a] || 0))
-      // 여자 페어/혼복 불일치를 최대한 줄이도록 자리를 살짝 조정 (best-effort, 완벽히 없애지는 못함)
-      const seeded = optimizeHanwoolSeedingForGender(skillSorted, genderMap)
-      // 한울표는 표 전체를 다 써야 인당 4경기(5~13명 기준)가 나오므로, 게임수 입력값과 무관하게 항상 표 전체를 사용
-      const maxGames = maxHanwoolGames(seeded.length)
-      createHanwoolSession(seeded, maxGames)
+      const maxGames = maxHanwoolGames(skillSorted.length)
+      createHanwoolSession(skillSorted, maxGames)
       return
     }
 
-    const genderMap: Record<string, 'M' | 'F' | null> = {}
-    members.forEach(m => { genderMap[m.name] = m.gender })
     const skillMap = computeQuarterSkillMap(sessions, allMatches, players)
     const { partnerFreq, oppFreq } = computeQuarterFrequencies(sessions, allMatches)
 
@@ -540,6 +552,9 @@ function GamesPageInner() {
     const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
     const title = sessionTitle.trim() || `${dateStr} 대회 ${groupLabel}`
 
+    const genderMap: Record<string, 'M' | 'F' | null> = {}
+    members.forEach(m => { genderMap[m.name] = m.gender })
+
     const { data: session, error } = await supabase
       .from('match_sessions')
       .insert({ title, session_date: dateStr, group_label: groupLabel, games_per_player: actualGames, end_score: Number(endScore) })
@@ -550,7 +565,7 @@ function GamesPageInner() {
 
     const matchRows: any[] = []
     rounds.forEach((round, roundIdx) => {
-      const balancedPairs = groupPairsIntoBalancedMatches(round, skillMap, oppFreq)
+      const balancedPairs = groupPairsIntoBalancedMatches(round, skillMap, oppFreq, genderMap)
       for (let i = 0; i + 1 < balancedPairs.length; i += 2) {
         matchRows.push({
           session_id: session.id,
@@ -826,12 +841,12 @@ function GamesPageInner() {
           </div>
 
           <div className="match-info-box" style={{ marginTop: 12 }}>
-            <p className="match-info-title">매칭 방식은 인원수에 맞춰 자동으로 골라요</p>
+            <p className="match-info-title">매칭 방식은 상황에 맞춰 자동으로 골라요</p>
             <ul className="match-info-list">
-              <li>5~16명: 검증된 <strong>한울 AA 공식표</strong>를 사용해요. 표 전체를 그대로 써서 5~13명은 인당 정확히 4경기, 14~16명은 인당 3~5경기 정도 나와요 (표 자체의 특성이라 완전히 균등하진 않아요). "1인당 게임수" 입력값은 이 방식에선 적용 안 돼요.</li>
-              <li>이번 분기 승점 기준으로 강한 순서대로 시드를 배정하고, 그 안에서 여자 페어·혼복 불일치가 최대한 줄어들도록 자리를 조정해요 (표 구조상 완전히 없애지는 못할 수 있어요).</li>
-              <li>4명 또는 17명 이상: <strong>자체 자동 밸런스 방식</strong>으로 만들어요 (성별 우선매칭, 실력 밸런스, 편중 방지 override 포함).</li>
-              <li>4명일 땐 파트너 조합이 최대 3가지뿐이라, 자동으로 3경기까지만 만들어져요.</li>
+              <li><strong>여성 참가자가 없으면</strong> (5~16명): 검증된 한울 AA 공식표를 표 전체 그대로 사용해요. 5~13명은 인당 정확히 4경기, 14~16명은 인당 3~5경기 정도 나와요.</li>
+              <li><strong>여성 참가자가 있으면</strong>: 자체 커스텀 엔진으로 매번 새로 짜요. 여자끼리 파트너가 되는 경우는 <strong>100% 방지</strong>되고 (여자끼리 상대로 만나는 건 전혀 문제없어요), 혼복팀끼리 서로 맞붙도록 우선 배정해요 — 고정된 표가 아니라 매번 새로 생성하기 때문에, 이 부분은 최대한 정확하게 맞춰져요.</li>
+              <li>4명 또는 17명 이상: 인원 특성상 자동으로 커스텀 엔진을 써요. 4명일 땐 파트너 조합이 최대 3가지뿐이라 자동으로 3경기까지만 만들어져요.</li>
+              <li>실력 밸런스와 편중 방지 override는 두 방식 모두에 적용돼요.</li>
             </ul>
           </div>
 
