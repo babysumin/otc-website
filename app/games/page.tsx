@@ -400,7 +400,6 @@ function GamesPageInner() {
   const [loading, setLoading] = useState(true)
 
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [matchMode, setMatchMode] = useState<'balanced' | 'hanwool'>('balanced')
   const [gamesPerPlayer, setGamesPerPlayer] = useState('4')
   const [endScore, setEndScore] = useState('4')
   const [groupLabel, setGroupLabel] = useState('A')
@@ -458,11 +457,10 @@ function GamesPageInner() {
       return
     }
 
-    if (matchMode === 'hanwool') {
-      if (players.length < 5 || players.length > 16) {
-        alert('한울 AA 공식표는 5~16명일 때만 사용할 수 있어요. 인원을 조정하거나 "우리 자동 밸런스" 방식을 선택해주세요.')
-        return
-      }
+    // 매칭 방식은 자동으로 통합 판별: 5~16명이면 한울 AA 공식표, 그 외(4명 또는 17명 이상)는 우리 자동 밸런스 방식
+    const useHanwool = players.length >= 5 && players.length <= 16
+
+    if (useHanwool) {
       const skillMap = computeQuarterSkillMap(sessions, allMatches, players)
       // 시드1 = 가장 잘하는 사람 순으로 정렬해서 표에 대입
       const seeded = [...players].sort((a, b) => (skillMap[b] || 0) - (skillMap[a] || 0))
@@ -752,15 +750,13 @@ function GamesPageInner() {
             ))}
           </div>
 
-          <div className="field" style={{ marginTop: 12 }}>
-            <label>매칭 방식</label>
-            <select value={matchMode} onChange={e => setMatchMode(e.target.value as 'balanced' | 'hanwool')}>
-              <option value="balanced">우리 자동 밸런스 (실력차/편중 방지 자동 조정)</option>
-              <option value="hanwool">한울 AA 공식표 (5~16명 전용, 실력순 시드 배정)</option>
-            </select>
-            {matchMode === 'hanwool' && (
-              <p className="upload-hint">이번 분기 승점 기준으로 강한 순서대로 시드1, 시드2...를 배정해서 한울 공식표를 그대로 적용해요. 5~16명일 때만 가능해요.</p>
-            )}
+          <div className="match-info-box" style={{ marginTop: 12 }}>
+            <p className="match-info-title">매칭 방식은 인원수에 맞춰 자동으로 골라요</p>
+            <ul className="match-info-list">
+              <li>5~16명: 검증된 <strong>한울 AA 공식표</strong>를 사용해요. 이번 분기 승점 기준으로 강한 순서대로 시드를 배정해서 대입해요.</li>
+              <li>4명 또는 17명 이상: <strong>자체 자동 밸런스 방식</strong>으로 만들어요 (성별 우선매칭, 실력 밸런스, 편중 방지 override 포함).</li>
+              <li>4명일 땐 파트너 조합이 최대 3가지뿐이라, 자동으로 3경기까지만 만들어져요.</li>
+            </ul>
           </div>
 
           <div className="create-options">
