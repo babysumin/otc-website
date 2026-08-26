@@ -877,11 +877,11 @@ function GamesPageInner() {
 
       <div className="subtabs">
         <button className={`subtab ${tab === 'sessions' ? 'active' : ''}`} onClick={() => { setTab('sessions'); setSelectedPlayer(null) }}>대회 목록</button>
-        {isAdmin && <button className={`subtab ${tab === 'create' ? 'active' : ''}`} onClick={() => setTab('create')}>대회 생성</button>}
+        {(isMember || isAdmin) && <button className={`subtab ${tab === 'create' ? 'active' : ''}`} onClick={() => setTab('create')}>대회 생성</button>}
         <button className={`subtab ${tab === 'ranking' ? 'active' : ''}`} onClick={() => { setTab('ranking'); setSelectedPlayer(null) }}>전체 랭킹</button>
       </div>
 
-      {tab === 'create' && isAdmin && (
+      {tab === 'create' && (isMember || isAdmin) && (
         <div className="games-setup">
           <p className="games-setup-label">플레이어 선택 ({selected.size}명 선택됨, 최소 4명 이상)</p>
           <div className="player-grid">
@@ -1094,7 +1094,7 @@ function GamesPageInner() {
                     <li>상태: {activeSession.is_finalized ? '✅ 순위 확정됨' : '진행 중'}</li>
                     <li>랭킹포인트 적용: 승리 +{WIN_POINTS}P / 무승부 +{DRAW_POINTS}P / 패배 +{LOSE_POINTS}P</li>
                   </ul>
-                  {isAdmin && <button className="btn" onClick={() => startEditInfo(activeSession)}>정보 수정</button>}
+                  {(isMember || isAdmin) && <button className="btn" onClick={() => startEditInfo(activeSession)}>정보 수정</button>}
                 </>
               )}
             </div>
@@ -1112,7 +1112,7 @@ function GamesPageInner() {
                         <span className="vs">vs</span>
                         <span className="team-names">{m.team2.join(' · ')}</span>
                       </div>
-                      {isAdmin ? (
+                      {(isMember || isAdmin) ? (
                         <div className="match-score-inputs">
                           <input type="number" defaultValue={m.score1 ?? ''} onBlur={e => updateScore(m.id, e.target.value ? Number(e.target.value) : null, m.score2)} />
                           <span>:</span>
@@ -1129,7 +1129,7 @@ function GamesPageInner() {
                 </div>
               ))}
 
-              {isAdmin && (
+              {(isMember || isAdmin) && (
                 <div className="games-setup" style={{ marginTop: 16 }}>
                   {!addMatchOpen ? (
                     <button className="btn" onClick={() => setAddMatchOpen(true)}>+ 매치 추가 (선수 잘못 넣었을 때)</button>
@@ -1187,7 +1187,7 @@ function GamesPageInner() {
 
           {sessionTab === 'ranking' && (
             <div>
-              {isAdmin && (
+              {(isMember || isAdmin) && (
                 <div className="modal-actions" style={{ justifyContent: 'flex-start', marginBottom: 12 }}>
                   {activeSession.is_finalized ? (
                     <button className="btn" onClick={() => finalizeSession(activeSession.id, false)}>순위확정 취소</button>
