@@ -33,7 +33,7 @@ tbody td{white-space:nowrap;}
 .status-badge.status-alumni{background:#f3e8fb;color:#7c3aed;}
 .officer-star.readonly{cursor:default;}
 .intro-view.no-edit{cursor:default;}
-.brand{display:flex;align-items:center;gap:16px;}
+.brand{display:flex;align-items:center;gap:16px;text-decoration:none;}
 .brand .mark{width:56px;height:56px;border-radius:14px;background:var(--navy);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:18px;}
 .brand .mark-img{width:56px;height:56px;border-radius:14px;object-fit:cover;}
 .intro-box{margin-bottom:20px;}
@@ -59,7 +59,7 @@ tbody td{white-space:nowrap;}
 tbody tr:hover .sticky-col-body{background:#fafbfc;}
 .ledger-date-input{width:120px;height:28px;border:1px solid var(--line-strong);border-radius:6px;font-size:12px;padding:0 6px;}
 .intro-view:hover{background:#fafbfc;}
-.intro-view p{margin:0;font-size:17px;color:var(--text);white-space:pre-wrap;line-height:1.75;font-weight:500;}
+.intro-view p{margin:0;font-size:19px;color:var(--text);white-space:pre-wrap;line-height:1.8;font-weight:700;}
 .intro-placeholder{color:var(--text-faint) !important;}
 .intro-textarea{width:100%;min-height:80px;border:1px solid var(--line-strong);border-radius:10px;padding:10px 12px;font-size:13.5px;font-family:inherit;resize:vertical;}
 .intro-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px;}

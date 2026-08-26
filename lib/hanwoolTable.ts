@@ -69,28 +69,6 @@ export function maxHanwoolGames(n: number): number {
   return getHanwoolSchedule(n).length
 }
 
-// 성별 위반 점수 계산: (여복 아닌데 여자+여자 페어) + (혼복인데 상대가 혼복 아님)
-function countGenderViolations(
-  seeded: string[],
-  genderMap: Record<string, 'M' | 'F' | null>,
-  schedule: Array<[[number, number], [number, number]]>
-): number {
-  let violations = 0
-  for (const [teamA, teamB] of schedule) {
-    const aGenders = [genderMap[seeded[teamA[0] - 1]], genderMap[seeded[teamA[1] - 1]]]
-    const bGenders = [genderMap[seeded[teamB[0] - 1]], genderMap[seeded[teamB[1] - 1]]]
-    const aF = aGenders.filter(g => g === 'F').length
-    const bF = bGenders.filter(g => g === 'F').length
-    const aType = aF === 2 ? 'FF' : aF === 1 ? 'MIX' : 'MM'
-    const bType = bF === 2 ? 'FF' : bF === 1 ? 'MIX' : 'MM'
-    if (aType === 'FF' && bType !== 'FF') violations++
-    if (bType === 'FF' && aType !== 'FF') violations++
-    if (aType === 'MIX' && bType !== 'MIX') violations++
-    if (bType === 'MIX' && aType !== 'MIX') violations++
-  }
-  return violations
-}
-
 // 시드 x, y가 표 안에서 단 한 번이라도 같은 팀(파트너)이 된 적 있는지 표시하는 그래프
 function buildPartnerGraph(n: number, schedule: Array<[[number, number], [number, number]]>): Set<string> {
   const edges = new Set<string>()
@@ -102,16 +80,78 @@ function buildPartnerGraph(n: number, schedule: Array<[[number, number], [number
   return edges
 }
 
-// 시드 슬롯들 중, 서로 절대 파트너가 되지 않는 슬롯 조합(독립집합)을 무작위 탐색으로 찾음
-function findIndependentSeats(n: number, count: number, edges: Set<string>, attempts = 500): number[] | null {
-  const key = (a: number, b: number) => [a, b].sort((x, y) => x - y).join('-')
-  const allSeats = Array.from({ length: n }, (_, i) => i + 1)
+// 시드가 어느 게임들에 참여하는지 목록 (게임 인덱스 집합)
+function buildGameParticipation(n: number, schedule: Array<[[number, number], [number, number]]>): Record<number, Set<number>> {
+  const result: Record<number, Set<number>> = {}
+  for (let s = 1; s <= n; s++) result[s] = new Set()
+  schedule.forEach(([teamA, teamB], gameIdx) => {
+    ;[...teamA, ...teamB].forEach(seed => result[seed].add(gameIdx))
+  })
+  return result
+}
 
+// '시드 우선 배정' 규칙: 인원수별로, 실력이 가장 낮은 선수들을 우선 배정할 "보호 시드" 번호
+// (원본 표의 안내: 실력 차이 나는 소수끼리 파트너가 되는 걸 피하고 싶을 때 사용하는 자리)
+const PROTECTED_SEATS: Record<number, number[]> = {
+  6: [1, 3],
+  7: [1, 5],
+  8: [1, 7],
+  9: [1, 4, 8],
+  10: [1, 8, 10],
+  11: [1, 5, 8, 9],
+  12: [2, 3, 8, 10],
+  13: [1, 4, 6, 11],
+  14: [2, 5, 8, 12],
+  15: [1, 4, 5, 10, 13],
+  16: [1, 6, 11, 16, 7, 10],
+}
+
+function pairKeyName(a: string, b: string): string {
+  return [a, b].sort().join('::')
+}
+
+// 여성이 정확히 2명일 때: 서로 절대 파트너가 안 되면서, 참여하는 게임이 최대한 겹치는 시드 쌍을 후보 자리 안에서 완전탐색
+function findBestTwoFemaleSeatsIn(
+  candidateSeats: number[],
+  avoidSeats: number[],
+  edges: Set<string>,
+  participation: Record<number, Set<number>>
+): [number, number] | null {
+  const key = (a: number, b: number) => [a, b].sort((x, y) => x - y).join('-')
+  let best: [number, number] | null = null
+  let bestOverlap = -1
+  for (let i = 0; i < candidateSeats.length; i++) {
+    for (let j = i + 1; j < candidateSeats.length; j++) {
+      const a = candidateSeats[i], b = candidateSeats[j]
+      if (edges.has(key(a, b))) continue
+      if (avoidSeats.some(s => edges.has(key(a, s)) || edges.has(key(b, s)))) continue
+      let overlap = 0
+      participation[a].forEach(g => { if (participation[b].has(g)) overlap++ })
+      if (overlap > bestOverlap) {
+        bestOverlap = overlap
+        best = [a, b]
+      }
+    }
+  }
+  return best
+}
+
+// 후보 자리 안에서, 서로 절대 파트너가 안 되고 avoidSeats와도 파트너가 안 되는 조합을 무작위 탐색으로 찾음
+function findIndependentSeatsIn(
+  candidateSeats: number[],
+  avoidSeats: number[],
+  count: number,
+  edges: Set<string>,
+  attempts = 300
+): number[] | null {
+  const key = (a: number, b: number) => [a, b].sort((x, y) => x - y).join('-')
   for (let attempt = 0; attempt < attempts; attempt++) {
-    const shuffled = [...allSeats].sort(() => Math.random() - 0.5)
+    const shuffled = [...candidateSeats].sort(() => Math.random() - 0.5)
     const chosen: number[] = []
     for (const seat of shuffled) {
-      if (chosen.every(c => !edges.has(key(seat, c)))) {
+      const okAgainstChosen = chosen.every(c => !edges.has(key(seat, c)))
+      const okAgainstAvoid = avoidSeats.every(a => !edges.has(key(seat, a)))
+      if (okAgainstChosen && okAgainstAvoid) {
         chosen.push(seat)
         if (chosen.length === count) return chosen
       }
@@ -120,52 +160,105 @@ function findIndependentSeats(n: number, count: number, edges: Set<string>, atte
   return null
 }
 
-// 실력순 시드 배정을 기준으로 여자 페어를 "확정적으로" 없애고(가능한 경우), 그다음 혼복끼리 붙도록 남성 자리를 미세조정
-export function optimizeHanwoolSeedingForGender(
-  skillSorted: string[],
-  genderMap: Record<string, 'M' | 'F' | null>
+// 한울 방식 전체 시드 배정: ①이번 분기 성적 최하위 선수들 -> 보호 시드 ②남은 자리에 여성 최적 배치(파트너 절대 금지) ③나머지 무작위 (단, 파트너 편중 완화)
+export function assignHanwoolSeeds(
+  players: string[],
+  skillMap: Record<string, number>,
+  genderMap: Record<string, 'M' | 'F' | null>,
+  partnerFreq: Record<string, number>
 ): string[] {
-  const females = skillSorted.filter(p => genderMap[p] === 'F')
-  const males = skillSorted.filter(p => genderMap[p] !== 'F')
-  const n = skillSorted.length
-  if (females.length === 0) return skillSorted
-
+  const n = players.length
   const schedule = getHanwoolSchedule(n)
-  const edges = buildPartnerGraph(n, schedule)
-  const femaleSeats = findIndependentSeats(n, females.length, edges)
+  if (schedule.length === 0) return players
 
-  let seeded: string[]
-  if (femaleSeats) {
-    // 여자들끼리 절대 파트너가 안 되는 자리를 찾았으면, 그 자리에 실력순으로 배정
-    seeded = new Array(n)
-    const sortedFemaleSeats = [...femaleSeats].sort((a, b) => a - b)
-    sortedFemaleSeats.forEach((seat, idx) => { seeded[seat - 1] = females[idx] })
-    const maleSeats = Array.from({ length: n }, (_, i) => i + 1).filter(s => !femaleSeats.includes(s))
-    maleSeats.sort((a, b) => a - b).forEach((seat, idx) => { seeded[seat - 1] = males[idx] })
-  } else {
-    // 독립집합을 못 찾으면(여성이 너무 많은 경우) 기존 방식대로 최선을 다해 줄이기
-    seeded = [...skillSorted]
+  const edges = buildPartnerGraph(n, schedule)
+  const participation = buildGameParticipation(n, schedule)
+  const protectedSeats = PROTECTED_SEATS[n] || []
+
+  // ① 이번 분기 성적이 가장 낮은 사람부터 보호 시드에 배정
+  const sortedAsc = [...players].sort((a, b) => (skillMap[a] || 0) - (skillMap[b] || 0))
+  const worstPlayers = sortedAsc.slice(0, protectedSeats.length)
+  const remainingPlayers = sortedAsc.slice(protectedSeats.length)
+
+  const seeded: string[] = new Array(n)
+  const sortedProtectedSeats = [...protectedSeats].sort((a, b) => a - b)
+  sortedProtectedSeats.forEach((seat, idx) => { seeded[seat - 1] = worstPlayers[idx] })
+
+  const remainingSeats = Array.from({ length: n }, (_, i) => i + 1).filter(s => !protectedSeats.includes(s))
+  const fixedFemaleSeats = sortedProtectedSeats.filter((seat, idx) => genderMap[worstPlayers[idx]] === 'F')
+
+  // ② 남은 여성들을 남은 자리 안에서 최적 배치
+  const remFemales = remainingPlayers.filter(p => genderMap[p] === 'F')
+  const remMales = remainingPlayers.filter(p => genderMap[p] !== 'F')
+
+  let femaleSeatChoice: number[] | null = null
+  if (remFemales.length === 2) {
+    femaleSeatChoice = findBestTwoFemaleSeatsIn(remainingSeats, fixedFemaleSeats, edges, participation)
+  } else if (remFemales.length > 0) {
+    femaleSeatChoice = findIndependentSeatsIn(remainingSeats, fixedFemaleSeats, remFemales.length, edges)
   }
 
-  // 2단계: 여자 자리는 고정한 채, 남자들 자리만 서로 바꿔가며 "혼복끼리 매칭"을 최대한 맞춤
-  const femaleSet = new Set(females)
-  let current = [...seeded]
-  let currentScore = countGenderViolations(current, genderMap, schedule)
-  for (let iter = 0; iter < 300 && currentScore > 0; iter++) {
-    const maleIndices = current.map((p, i) => (femaleSet.has(p) ? -1 : i)).filter(i => i >= 0)
-    const i = maleIndices[Math.floor(Math.random() * maleIndices.length)]
-    const j = maleIndices[Math.floor(Math.random() * maleIndices.length)]
-    if (i === j) continue
-    const trial = [...current]
-    ;[trial[i], trial[j]] = [trial[j], trial[i]]
-    const trialScore = countGenderViolations(trial, genderMap, schedule)
-    if (trialScore <= currentScore) {
-      current = trial
-      currentScore = trialScore
+  const usedRemainingSeats = new Set<number>()
+  if (femaleSeatChoice) {
+    femaleSeatChoice.forEach((seat, idx) => {
+      seeded[seat - 1] = remFemales[idx]
+      usedRemainingSeats.add(seat)
+    })
+  }
+
+  // ③ 나머지는 무작위 배정, 단 같은 파트너를 평균보다 압도적으로 자주 만나는 조합이면 다시 섞기
+  const leftoverSeats = remainingSeats.filter(s => !usedRemainingSeats.has(s))
+  const leftoverPlayers = femaleSeatChoice ? remMales : remainingPlayers // 여성 배치 실패시(못 찾은 경우) remainingPlayers 전체를 무작위 대상으로
+
+  function shuffle<T>(arr: T[]): T[] {
+    const a = [...arr]
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[a[i], a[j]] = [a[j], a[i]]
+    }
+    return a
+  }
+
+  function overusedCount(trialSeeded: string[]): number {
+    let total = 0, count = 0
+    for (const [teamA, teamB] of schedule) {
+      const pairs: [number, number][] = [teamA, teamB]
+      for (const [x, y] of pairs) {
+        total += partnerFreq[pairKeyName(trialSeeded[x - 1], trialSeeded[y - 1])] || 0
+        count++
+      }
+    }
+    const avg = count > 0 ? total / count : 0
+    let violations = 0
+    for (const [teamA, teamB] of schedule) {
+      const pairs: [number, number][] = [teamA, teamB]
+      for (const [x, y] of pairs) {
+        const freq = partnerFreq[pairKeyName(trialSeeded[x - 1], trialSeeded[y - 1])] || 0
+        if (freq > avg + 1) violations++
+      }
+    }
+    return violations
+  }
+
+  let bestLeftoverOrder = shuffle(leftoverPlayers)
+  let bestScore = Infinity
+  for (let attempt = 0; attempt < 60; attempt++) {
+    const candidate = shuffle(leftoverPlayers)
+    const trial = [...seeded]
+    leftoverSeats.forEach((seat, idx) => { trial[seat - 1] = candidate[idx] })
+    const score = overusedCount(trial)
+    if (score < bestScore) {
+      bestScore = score
+      bestLeftoverOrder = candidate
+      if (score === 0) break
     }
   }
-  return current
+  leftoverSeats.forEach((seat, idx) => { seeded[seat - 1] = bestLeftoverOrder[idx] })
+
+  return seeded
 }
+
+
 
 // 시드번호(1~N) 배열을 실제 플레이어 이름으로 변환한 매치 목록 생성
 // players는 이미 "시드 순서대로" 정렬된 상태로 전달해야 함 (seed 1 = players[0], ...)

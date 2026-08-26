@@ -13,7 +13,7 @@ const NAV_ITEMS = [
   { href: '/account', label: '장부' },
   { href: '/membership-ledger', label: '멤버십 장부' },
   { href: '/games', label: '경기' },
-  { href: '/policy', label: '모임 Policy' },
+  { href: '/policy', label: '모임규정' },
   { href: '/etiquette', label: '테니스 에티켓' },
   { href: '/suggestions', label: '익명 마음의 소리' },
 ]

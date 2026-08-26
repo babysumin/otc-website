@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { supabase, Member } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 import { useMemberAuth } from '@/lib/useMemberAuth'
-import { getHanwoolSchedule, maxHanwoolGames, buildHanwoolMatches } from '@/lib/hanwoolTable'
+import { getHanwoolSchedule, maxHanwoolGames, buildHanwoolMatches, assignHanwoolSeeds } from '@/lib/hanwoolTable'
 import TopNav from '@/components/TopNav'
 import MemberGate from '@/components/MemberGate'
 
@@ -481,16 +481,17 @@ function GamesPageInner() {
 
     const genderMap: Record<string, 'M' | 'F' | null> = {}
     members.forEach(m => { genderMap[m.name] = m.gender })
-    const hasFemale = players.some(p => genderMap[p] === 'F')
 
-    // 여성이 없으면 검증된 한울 AA 공식표(5~16명), 여성이 있으면 성별 우선순위를 완전히 반영할 수 있는 자체 커스텀 엔진 사용
-    const useHanwool = !hasFemale && players.length >= 5 && players.length <= 16
+    // 5~16명이면 항상 한울 AA 공식표(순차 게임 리스트) 사용. 시드 배정만 우리 데이터로 커스터마이징:
+    // ① 이번 분기 최하위 성적자 -> 보호 시드 ② 여성 -> 파트너 절대 금지 + 최적 배치 ③ 나머지 무작위(편중 완화)
+    const useHanwool = players.length >= 5 && players.length <= 16
 
     if (useHanwool) {
       const skillMap = computeQuarterSkillMap(sessions, allMatches, players)
-      const skillSorted = [...players].sort((a, b) => (skillMap[b] || 0) - (skillMap[a] || 0))
-      const maxGames = maxHanwoolGames(skillSorted.length)
-      createHanwoolSession(skillSorted, maxGames)
+      const { partnerFreq } = computeQuarterFrequencies(sessions, allMatches)
+      const seeded = assignHanwoolSeeds(players, skillMap, genderMap, partnerFreq)
+      const maxGames = maxHanwoolGames(seeded.length)
+      createHanwoolSession(seeded, maxGames)
       return
     }
 
@@ -841,12 +842,12 @@ function GamesPageInner() {
           </div>
 
           <div className="match-info-box" style={{ marginTop: 12 }}>
-            <p className="match-info-title">매칭 방식은 상황에 맞춰 자동으로 골라요</p>
+            <p className="match-info-title">매칭은 한울 AA 방식을 기반으로, 우리 데이터로 시드를 커스터마이징해요</p>
             <ul className="match-info-list">
-              <li><strong>여성 참가자가 없으면</strong> (5~16명): 검증된 한울 AA 공식표를 표 전체 그대로 사용해요. 5~13명은 인당 정확히 4경기, 14~16명은 인당 3~5경기 정도 나와요.</li>
-              <li><strong>여성 참가자가 있으면</strong>: 자체 커스텀 엔진으로 매번 새로 짜요. 여자끼리 파트너가 되는 경우는 <strong>100% 방지</strong>되고 (여자끼리 상대로 만나는 건 전혀 문제없어요), 혼복팀끼리 서로 맞붙도록 우선 배정해요 — 고정된 표가 아니라 매번 새로 생성하기 때문에, 이 부분은 최대한 정확하게 맞춰져요.</li>
-              <li>4명 또는 17명 이상: 인원 특성상 자동으로 커스텀 엔진을 써요. 4명일 땐 파트너 조합이 최대 3가지뿐이라 자동으로 3경기까지만 만들어져요.</li>
-              <li>실력 밸런스와 편중 방지 override는 두 방식 모두에 적용돼요.</li>
+              <li><strong>5~16명</strong>: 검증된 한울 AA 공식표(순차 게임 리스트)를 그대로 사용해요. 5~13명은 인당 정확히 4경기, 14~16명은 인당 3~5경기 정도 나와요.</li>
+              <li><strong>시드 배정</strong>: 이번 분기 성적이 가장 낮은 선수들을 표의 "보호 시드" 자리에 먼저 배정해서, 약자끼리 파트너가 되는 상황을 줄여요. 나머지는 무작위로 배정하되, 같은 파트너를 평균보다 압도적으로 자주 만나면 다시 섞어요.</li>
+              <li><strong>여성 참가자가 있으면</strong>: 여자끼리 파트너가 되는 경우는 남은 자리 안에서 <strong>확정적으로 방지</strong>돼요 (여자끼리 상대로 만나는 건 전혀 문제없어요). 혼복팀끼리 서로 맞붙도록 게임 겹침을 최대화해서 배정해요.</li>
+              <li>4명 또는 17명 이상: 자체 커스텀 엔진을 써요. 4명일 땐 파트너 조합이 최대 3가지뿐이라 자동으로 3경기까지만 만들어져요.</li>
             </ul>
           </div>
 

@@ -3,13 +3,10 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
-import { useMemberAuth } from '@/lib/useMemberAuth'
 import TopNav from '@/components/TopNav'
-import MemberGate from '@/components/MemberGate'
 
 export default function PolicyPage() {
   const { isAdmin } = useAuth()
-  const { isMember, pwInput, setPwInput, pwErr, checkPassword } = useMemberAuth()
   const [content, setContent] = useState('')
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
@@ -51,24 +48,12 @@ export default function PolicyPage() {
     return d.toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
   }
 
-  if (!isMember && !isAdmin) {
-    return (
-      <div className="wrap">
-        <TopNav />
-        <div className="section-header">
-          <h2 className="section-title">모임 Policy</h2>
-        </div>
-        <MemberGate title="모임 Policy" pwInput={pwInput} setPwInput={setPwInput} pwErr={pwErr} checkPassword={checkPassword} />
-      </div>
-    )
-  }
-
   return (
     <div className="wrap">
       <TopNav />
 
       <div className="section-header">
-        <h2 className="section-title">모임 Policy</h2>
+        <h2 className="section-title">모임규정</h2>
         {isAdmin && !editing && <button className="btn primary" onClick={startEdit}>수정</button>}
       </div>
 
