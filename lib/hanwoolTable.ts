@@ -69,6 +69,62 @@ export function maxHanwoolGames(n: number): number {
   return getHanwoolSchedule(n).length
 }
 
+// 성별 위반 점수 계산: (여복 아닌데 여자+여자 페어) + (혼복인데 상대가 혼복 아님)
+function countGenderViolations(
+  seeded: string[],
+  genderMap: Record<string, 'M' | 'F' | null>,
+  schedule: Array<[[number, number], [number, number]]>
+): number {
+  let violations = 0
+  for (const [teamA, teamB] of schedule) {
+    const aGenders = [genderMap[seeded[teamA[0] - 1]], genderMap[seeded[teamA[1] - 1]]]
+    const bGenders = [genderMap[seeded[teamB[0] - 1]], genderMap[seeded[teamB[1] - 1]]]
+    const aF = aGenders.filter(g => g === 'F').length
+    const bF = bGenders.filter(g => g === 'F').length
+    const aType = aF === 2 ? 'FF' : aF === 1 ? 'MIX' : 'MM'
+    const bType = bF === 2 ? 'FF' : bF === 1 ? 'MIX' : 'MM'
+    if (aType === 'FF' && bType !== 'FF') violations++
+    if (bType === 'FF' && aType !== 'FF') violations++
+    if (aType === 'MIX' && bType !== 'MIX') violations++
+    if (bType === 'MIX' && aType !== 'MIX') violations++
+  }
+  return violations
+}
+
+// 실력순 시드 배정을 기준으로, 여자 페어/혼복 불일치를 최대한 줄이도록 자리를 살짝 바꿔봄
+// (한울표 자체는 고정된 표라 완벽하게 없앨 수는 없고, 최대한 줄이는 best-effort 방식)
+export function optimizeHanwoolSeedingForGender(
+  skillSorted: string[],
+  genderMap: Record<string, 'M' | 'F' | null>
+): string[] {
+  const hasFemale = skillSorted.some(p => genderMap[p] === 'F')
+  if (!hasFemale) return skillSorted
+
+  const schedule = getHanwoolSchedule(skillSorted.length)
+  let best = [...skillSorted]
+  let bestScore = countGenderViolations(best, genderMap, schedule)
+  if (bestScore === 0) return best
+
+  let current = [...best]
+  for (let iter = 0; iter < 400 && bestScore > 0; iter++) {
+    const i = Math.floor(Math.random() * current.length)
+    const j = Math.floor(Math.random() * current.length)
+    if (i === j) continue
+    const trial = [...current]
+    ;[trial[i], trial[j]] = [trial[j], trial[i]]
+    const trialScore = countGenderViolations(trial, genderMap, schedule)
+    const currentScore = countGenderViolations(current, genderMap, schedule)
+    if (trialScore <= currentScore) {
+      current = trial
+      if (trialScore < bestScore) {
+        bestScore = trialScore
+        best = [...current]
+      }
+    }
+  }
+  return best
+}
+
 // 시드번호(1~N) 배열을 실제 플레이어 이름으로 변환한 매치 목록 생성
 // players는 이미 "시드 순서대로" 정렬된 상태로 전달해야 함 (seed 1 = players[0], ...)
 // 표의 '게임' 하나가 곧 매치 하나이므로, 별도의 팀 그룹핑 없이 바로 매치 리스트로 반환

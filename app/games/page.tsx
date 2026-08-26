@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { supabase, Member } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 import { useMemberAuth } from '@/lib/useMemberAuth'
-import { getHanwoolSchedule, maxHanwoolGames, buildHanwoolMatches } from '@/lib/hanwoolTable'
+import { getHanwoolSchedule, maxHanwoolGames, buildHanwoolMatches, optimizeHanwoolSeedingForGender } from '@/lib/hanwoolTable'
 import TopNav from '@/components/TopNav'
 import MemberGate from '@/components/MemberGate'
 
@@ -461,17 +461,16 @@ function GamesPageInner() {
     const useHanwool = players.length >= 5 && players.length <= 16
 
     if (useHanwool) {
+      const genderMap: Record<string, 'M' | 'F' | null> = {}
+      members.forEach(m => { genderMap[m.name] = m.gender })
       const skillMap = computeQuarterSkillMap(sessions, allMatches, players)
       // 시드1 = 가장 잘하는 사람 순으로 정렬해서 표에 대입
-      const seeded = [...players].sort((a, b) => (skillMap[b] || 0) - (skillMap[a] || 0))
-      const desired = Number(gamesPerPlayer) || 1
+      const skillSorted = [...players].sort((a, b) => (skillMap[b] || 0) - (skillMap[a] || 0))
+      // 여자 페어/혼복 불일치를 최대한 줄이도록 자리를 살짝 조정 (best-effort, 완벽히 없애지는 못함)
+      const seeded = optimizeHanwoolSeedingForGender(skillSorted, genderMap)
+      // 한울표는 표 전체를 다 써야 인당 4경기(5~13명 기준)가 나오므로, 게임수 입력값과 무관하게 항상 표 전체를 사용
       const maxGames = maxHanwoolGames(seeded.length)
-      if (desired > maxGames) {
-        setConfirmMsg(`한울표는 ${seeded.length}명 기준 최대 ${maxGames}게임까지만 지원해요. ${maxGames}게임으로 진행할까요?`)
-        setPendingGeneration({ rounds: [], actualGames: maxGames, skillMap, oppFreq: {}, hanwoolSeeded: seeded })
-      } else {
-        createHanwoolSession(seeded, desired)
-      }
+      createHanwoolSession(seeded, maxGames)
       return
     }
 
@@ -753,7 +752,8 @@ function GamesPageInner() {
           <div className="match-info-box" style={{ marginTop: 12 }}>
             <p className="match-info-title">매칭 방식은 인원수에 맞춰 자동으로 골라요</p>
             <ul className="match-info-list">
-              <li>5~16명: 검증된 <strong>한울 AA 공식표</strong>를 사용해요. 이번 분기 승점 기준으로 강한 순서대로 시드를 배정해서 대입해요.</li>
+              <li>5~16명: 검증된 <strong>한울 AA 공식표</strong>를 사용해요. 표 전체를 그대로 써서 5~13명은 인당 정확히 4경기, 14~16명은 인당 3~5경기 정도 나와요 (표 자체의 특성이라 완전히 균등하진 않아요). "1인당 게임수" 입력값은 이 방식에선 적용 안 돼요.</li>
+              <li>이번 분기 승점 기준으로 강한 순서대로 시드를 배정하고, 그 안에서 여자 페어·혼복 불일치가 최대한 줄어들도록 자리를 조정해요 (표 구조상 완전히 없애지는 못할 수 있어요).</li>
               <li>4명 또는 17명 이상: <strong>자체 자동 밸런스 방식</strong>으로 만들어요 (성별 우선매칭, 실력 밸런스, 편중 방지 override 포함).</li>
               <li>4명일 땐 파트너 조합이 최대 3가지뿐이라, 자동으로 3경기까지만 만들어져요.</li>
             </ul>
@@ -942,39 +942,6 @@ function GamesPageInner() {
           </div>
           {rankingGroupFilter !== 'all' && (
             <p className="upload-hint">대회 생성할 때 지정한 조(A조/B조) 기준으로 자동 분류돼요.</p>
-          )}
-
-          <h3 className="subsection-title">전체 누적 랭킹</h3>
-          {overallStats.length === 0 && <div className="empty">아직 결과가 입력된 경기가 없어요.</div>}
-          {overallStats.length > 0 && (
-            <div className="table-wrap" style={{ marginBottom: 24 }}>
-              <table>
-                <thead>
-                  <tr>
-                    <th>순위</th><th>이름</th><th>경기수</th><th>승</th><th>무</th><th>패</th><th>승률</th><th>승점</th><th>득실</th>
-                    <th>이벤트 참가</th><th>베스트 파트너</th><th>최다 상대</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {overallStats.map((s, i) => (
-                    <tr key={s.name}>
-                      <td className="rank-num">{i + 1}</td>
-                      <td className="name-cell player-name-link" onClick={() => setSelectedPlayer(s.name)}>{s.name}</td>
-                      <td>{s.games}</td>
-                      <td>{s.wins}</td>
-                      <td>{s.draws}</td>
-                      <td>{s.losses}</td>
-                      <td>{s.games > 0 ? `${((s.wins / s.games) * 100).toFixed(1)}%` : '-'}</td>
-                      <td className="ledger-total">{s.points}P</td>
-                      <td>{s.diff > 0 ? `+${s.diff}` : s.diff}</td>
-                      <td>{eventCounts[s.name] || 0}회</td>
-                      <td>{s.bestPartner ? `${s.bestPartner} (${s.bestPartnerCount}회)` : '-'}</td>
-                      <td>{s.rival ? `${s.rival} (${s.rivalCount}회)` : '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           )}
 
           <h3 className="subsection-title">분기별 랭킹</h3>
