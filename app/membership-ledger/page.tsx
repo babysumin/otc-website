@@ -83,6 +83,13 @@ function MembershipLedgerPageInner() {
     await supabase.from('members').update({ gender: next }).eq('id', info.id)
   }
 
+  async function setStatus(memberName: string, status: MemberStatus) {
+    const info = memberMap[memberName]
+    if (!info) return
+    setMemberMap(prev => ({ ...prev, [memberName]: { ...prev[memberName], status } }))
+    await supabase.from('members').update({ status }).eq('id', info.id)
+  }
+
   async function updateCell(row: LedgerRow, monthKey: keyof LedgerRow, value: string) {
     const num = value === '' ? null : Number(value)
     setRows(prev => prev.map(r => (r.id === row.id ? { ...r, [monthKey]: num } : r)))
@@ -210,7 +217,21 @@ function MembershipLedgerPageInner() {
                       <GenderIcon gender={info?.gender || null} />
                     )}
                   </td>
-                  <td><span className={`status-badge status-${status}`}>{STATUS_LABEL[status]}</span></td>
+                  <td>
+                    {isAdmin ? (
+                      <select
+                        className={`status-select status-${status}`}
+                        value={status}
+                        onChange={e => setStatus(r.member_name, e.target.value as MemberStatus)}
+                      >
+                        <option value="member">정회원</option>
+                        <option value="guest">게스트</option>
+                        <option value="alumni">동문</option>
+                      </select>
+                    ) : (
+                      <span className={`status-badge status-${status}`}>{STATUS_LABEL[status]}</span>
+                    )}
+                  </td>
                   {MONTHS.map(m => (
                     <td key={m.key}>
                       {isAdmin ? (

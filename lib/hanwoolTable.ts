@@ -91,38 +91,80 @@ function countGenderViolations(
   return violations
 }
 
-// 실력순 시드 배정을 기준으로, 여자 페어/혼복 불일치를 최대한 줄이도록 자리를 살짝 바꿔봄
-// (한울표 자체는 고정된 표라 완벽하게 없앨 수는 없고, 최대한 줄이는 best-effort 방식)
+// 시드 x, y가 표 안에서 단 한 번이라도 같은 팀(파트너)이 된 적 있는지 표시하는 그래프
+function buildPartnerGraph(n: number, schedule: Array<[[number, number], [number, number]]>): Set<string> {
+  const edges = new Set<string>()
+  const key = (a: number, b: number) => [a, b].sort((x, y) => x - y).join('-')
+  for (const [teamA, teamB] of schedule) {
+    edges.add(key(teamA[0], teamA[1]))
+    edges.add(key(teamB[0], teamB[1]))
+  }
+  return edges
+}
+
+// 시드 슬롯들 중, 서로 절대 파트너가 되지 않는 슬롯 조합(독립집합)을 무작위 탐색으로 찾음
+function findIndependentSeats(n: number, count: number, edges: Set<string>, attempts = 500): number[] | null {
+  const key = (a: number, b: number) => [a, b].sort((x, y) => x - y).join('-')
+  const allSeats = Array.from({ length: n }, (_, i) => i + 1)
+
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const shuffled = [...allSeats].sort(() => Math.random() - 0.5)
+    const chosen: number[] = []
+    for (const seat of shuffled) {
+      if (chosen.every(c => !edges.has(key(seat, c)))) {
+        chosen.push(seat)
+        if (chosen.length === count) return chosen
+      }
+    }
+  }
+  return null
+}
+
+// 실력순 시드 배정을 기준으로 여자 페어를 "확정적으로" 없애고(가능한 경우), 그다음 혼복끼리 붙도록 남성 자리를 미세조정
 export function optimizeHanwoolSeedingForGender(
   skillSorted: string[],
   genderMap: Record<string, 'M' | 'F' | null>
 ): string[] {
-  const hasFemale = skillSorted.some(p => genderMap[p] === 'F')
-  if (!hasFemale) return skillSorted
+  const females = skillSorted.filter(p => genderMap[p] === 'F')
+  const males = skillSorted.filter(p => genderMap[p] !== 'F')
+  const n = skillSorted.length
+  if (females.length === 0) return skillSorted
 
-  const schedule = getHanwoolSchedule(skillSorted.length)
-  let best = [...skillSorted]
-  let bestScore = countGenderViolations(best, genderMap, schedule)
-  if (bestScore === 0) return best
+  const schedule = getHanwoolSchedule(n)
+  const edges = buildPartnerGraph(n, schedule)
+  const femaleSeats = findIndependentSeats(n, females.length, edges)
 
-  let current = [...best]
-  for (let iter = 0; iter < 400 && bestScore > 0; iter++) {
-    const i = Math.floor(Math.random() * current.length)
-    const j = Math.floor(Math.random() * current.length)
+  let seeded: string[]
+  if (femaleSeats) {
+    // 여자들끼리 절대 파트너가 안 되는 자리를 찾았으면, 그 자리에 실력순으로 배정
+    seeded = new Array(n)
+    const sortedFemaleSeats = [...femaleSeats].sort((a, b) => a - b)
+    sortedFemaleSeats.forEach((seat, idx) => { seeded[seat - 1] = females[idx] })
+    const maleSeats = Array.from({ length: n }, (_, i) => i + 1).filter(s => !femaleSeats.includes(s))
+    maleSeats.sort((a, b) => a - b).forEach((seat, idx) => { seeded[seat - 1] = males[idx] })
+  } else {
+    // 독립집합을 못 찾으면(여성이 너무 많은 경우) 기존 방식대로 최선을 다해 줄이기
+    seeded = [...skillSorted]
+  }
+
+  // 2단계: 여자 자리는 고정한 채, 남자들 자리만 서로 바꿔가며 "혼복끼리 매칭"을 최대한 맞춤
+  const femaleSet = new Set(females)
+  let current = [...seeded]
+  let currentScore = countGenderViolations(current, genderMap, schedule)
+  for (let iter = 0; iter < 300 && currentScore > 0; iter++) {
+    const maleIndices = current.map((p, i) => (femaleSet.has(p) ? -1 : i)).filter(i => i >= 0)
+    const i = maleIndices[Math.floor(Math.random() * maleIndices.length)]
+    const j = maleIndices[Math.floor(Math.random() * maleIndices.length)]
     if (i === j) continue
     const trial = [...current]
     ;[trial[i], trial[j]] = [trial[j], trial[i]]
     const trialScore = countGenderViolations(trial, genderMap, schedule)
-    const currentScore = countGenderViolations(current, genderMap, schedule)
     if (trialScore <= currentScore) {
       current = trial
-      if (trialScore < bestScore) {
-        bestScore = trialScore
-        best = [...current]
-      }
+      currentScore = trialScore
     }
   }
-  return best
+  return current
 }
 
 // 시드번호(1~N) 배열을 실제 플레이어 이름으로 변환한 매치 목록 생성

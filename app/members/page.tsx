@@ -138,7 +138,7 @@ function MembersPageInner() {
       })
   }, [members, search, statusTab])
 
-  if (!isMember) {
+  if (!isMember && !isAdmin) {
     return (
       <div className="wrap">
         <TopNav />
@@ -218,21 +218,7 @@ function MembersPageInner() {
                   {m.is_officer && <span className="officer-badge">운영진</span>}
                 </td>
                 <td><GenderIcon gender={m.gender} /></td>
-                <td>
-                  {isAdmin ? (
-                    <select
-                      className={`status-select status-${m.status}`}
-                      value={m.status}
-                      onChange={e => changeStatus(m, e.target.value as MemberStatus)}
-                    >
-                      <option value="member">정회원</option>
-                      <option value="guest">게스트</option>
-                      <option value="alumni">동문</option>
-                    </select>
-                  ) : (
-                    <span className={`status-badge status-${m.status}`}>{STATUS_LABEL[m.status]}</span>
-                  )}
-                </td>
+                <td><span className={`status-badge status-${m.status}`}>{STATUS_LABEL[m.status]}</span></td>
                 <td>{m.join_date || '-'}</td>
                 <td>{isAdmin && <button className="icon-btn" onClick={() => openEdit(m)}>⋯</button>}</td>
               </tr>

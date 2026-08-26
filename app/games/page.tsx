@@ -27,6 +27,7 @@ type SessionRow = {
   games_per_player: number
   end_score: number
   created_at: string
+  is_finalized: boolean
 }
 
 type PlayerStat = {
@@ -411,6 +412,11 @@ function GamesPageInner() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [sessionTab, setSessionTab] = useState<'info' | 'results' | 'ranking'>('results')
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null)
+  const [editingInfo, setEditingInfo] = useState(false)
+  const [infoDraft, setInfoDraft] = useState({ title: '', group_label: 'A', end_score: '4' })
+  const [addMatchOpen, setAddMatchOpen] = useState(false)
+  const [addMatchForm, setAddMatchForm] = useState({ round: '1', p1: '', p2: '', p3: '', p4: '' })
+  const [finalizeMsg, setFinalizeMsg] = useState<string | null>(null)
 
   useEffect(() => {
     fetchMembers()
@@ -583,6 +589,72 @@ function GamesPageInner() {
     fetchAll()
   }
 
+  function startEditInfo(s: SessionRow) {
+    setInfoDraft({ title: s.title, group_label: s.group_label, end_score: String(s.end_score) })
+    setEditingInfo(true)
+  }
+
+  async function saveEditInfo(sessionId: string) {
+    await supabase
+      .from('match_sessions')
+      .update({ title: infoDraft.title, group_label: infoDraft.group_label, end_score: Number(infoDraft.end_score) })
+      .eq('id', sessionId)
+    setEditingInfo(false)
+    fetchAll()
+  }
+
+  async function deleteMatch(id: string) {
+    if (!confirm('이 매치를 삭제할까요?')) return
+    await supabase.from('matches').delete().eq('id', id)
+    fetchAll()
+  }
+
+  async function addMatch(sessionId: string) {
+    const { round, p1, p2, p3, p4 } = addMatchForm
+    if (!p1 || !p2 || !p3 || !p4) {
+      alert('4명 모두 선택해주세요')
+      return
+    }
+    await supabase.from('matches').insert({
+      session_id: sessionId,
+      round_no: Number(round) || 1,
+      team1: [p1, p2],
+      team2: [p3, p4],
+      score1: null,
+      score2: null,
+    })
+    setAddMatchOpen(false)
+    setAddMatchForm({ round: '1', p1: '', p2: '', p3: '', p4: '' })
+    fetchAll()
+  }
+
+  async function removePlayerFromSession(sessionId: string, playerName: string) {
+    if (!confirm(`${playerName} 님이 포함된 매치를 전부 삭제할까요? 되돌릴 수 없어요.`)) return
+    const toDelete = allMatches.filter(m => m.session_id === sessionId && (m.team1.includes(playerName) || m.team2.includes(playerName)))
+    for (const m of toDelete) {
+      await supabase.from('matches').delete().eq('id', m.id)
+    }
+    fetchAll()
+  }
+
+  function attemptFinalize(sessionId: string) {
+    const matches = allMatches.filter(m => m.session_id === sessionId)
+    const missing = matches.filter(m => m.score1 == null || m.score2 == null)
+    if (missing.length > 0) {
+      const rounds = Array.from(new Set(missing.map(m => m.round_no))).sort((a, b) => (a || 0) - (b || 0))
+      setFinalizeMsg(`아직 스코어가 비어있는 경기가 ${missing.length}건 있어요 (${rounds.map(r => `${r}라운드`).join(', ')}). 먼저 다 입력해주세요.`)
+      return
+    }
+    if (confirm('이 대회의 경기 기록이 모두 정확히 입력된 게 맞나요? 확정하면 순위가 최종 확정돼요.')) {
+      finalizeSession(sessionId, true)
+    }
+  }
+
+  async function finalizeSession(sessionId: string, finalized: boolean) {
+    await supabase.from('match_sessions').update({ is_finalized: finalized }).eq('id', sessionId)
+    fetchAll()
+  }
+
   // 1번: 분기별로 대회 그룹핑
   const sessionsByQuarter = useMemo(() => {
     const qMap = new Map<string, Map<string, SessionRow[]>>()
@@ -703,7 +775,7 @@ function GamesPageInner() {
     return Object.entries(counts).sort((a, b) => b[1].games - a[1].games)
   }, [selectedPlayer, playerMatches])
 
-  if (!isMember) {
+  if (!isMember && !isAdmin) {
     return (
       <div className="wrap">
         <TopNav />
@@ -743,7 +815,7 @@ function GamesPageInner() {
 
       {tab === 'create' && isAdmin && (
         <div className="games-setup">
-          <p className="games-setup-label">플레이어 선택 ({selected.size}명 선택됨, 4명 단위 필요)</p>
+          <p className="games-setup-label">플레이어 선택 ({selected.size}명 선택됨, 최소 4명 이상)</p>
           <div className="player-grid">
             {members.map(m => (
               <label key={m.id} className={`player-chip ${selected.has(m.name) ? 'active' : ''}`}>
@@ -865,15 +937,46 @@ function GamesPageInner() {
 
           {sessionTab === 'info' && (
             <div className="policy-view">
-              <ul className="session-info-list">
-                <li>클럽: On the Court San Diego Korean Tennis Club</li>
-                <li>대회일자: {activeSession.session_date}</li>
-                <li>게임방식: 복식</li>
-                <li>경기종료점수: {activeSession.end_score}점</li>
-                <li>1인당 게임수: {activeSession.games_per_player} 게임</li>
-                <li>조: {activeSession.group_label}조</li>
-                <li>랭킹포인트 적용: 승리 +{WIN_POINTS}P / 무승부 +{DRAW_POINTS}P / 패배 +{LOSE_POINTS}P</li>
-              </ul>
+              {editingInfo ? (
+                <>
+                  <div className="field">
+                    <label>대회 이름</label>
+                    <input value={infoDraft.title} onChange={e => setInfoDraft({ ...infoDraft, title: e.target.value })} />
+                  </div>
+                  <div className="field">
+                    <label>조</label>
+                    <select value={infoDraft.group_label} onChange={e => setInfoDraft({ ...infoDraft, group_label: e.target.value })}>
+                      <option value="A">A조</option>
+                      <option value="B">B조</option>
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label>경기종료점수</label>
+                    <select value={infoDraft.end_score} onChange={e => setInfoDraft({ ...infoDraft, end_score: e.target.value })}>
+                      <option value="4">4점</option>
+                      <option value="6">6점</option>
+                    </select>
+                  </div>
+                  <div className="modal-actions">
+                    <button className="btn" onClick={() => setEditingInfo(false)}>취소</button>
+                    <button className="btn primary" onClick={() => saveEditInfo(activeSession.id)}>저장</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <ul className="session-info-list">
+                    <li>클럽: On the Court San Diego Korean Tennis Club</li>
+                    <li>대회일자: {activeSession.session_date}</li>
+                    <li>게임방식: 복식</li>
+                    <li>경기종료점수: {activeSession.end_score}점</li>
+                    <li>1인당 게임수: {activeSession.games_per_player} 게임</li>
+                    <li>조: {activeSession.group_label}조</li>
+                    <li>상태: {activeSession.is_finalized ? '✅ 순위 확정됨' : '진행 중'}</li>
+                    <li>랭킹포인트 적용: 승리 +{WIN_POINTS}P / 무승부 +{DRAW_POINTS}P / 패배 +{LOSE_POINTS}P</li>
+                  </ul>
+                  {isAdmin && <button className="btn" onClick={() => startEditInfo(activeSession)}>정보 수정</button>}
+                </>
+              )}
             </div>
           )}
 
@@ -894,6 +997,7 @@ function GamesPageInner() {
                           <input type="number" defaultValue={m.score1 ?? ''} onBlur={e => updateScore(m.id, e.target.value ? Number(e.target.value) : null, m.score2)} />
                           <span>:</span>
                           <input type="number" defaultValue={m.score2 ?? ''} onBlur={e => updateScore(m.id, m.score1, e.target.value ? Number(e.target.value) : null)} />
+                          <button className="icon-btn" onClick={() => deleteMatch(m.id)} title="이 매치 삭제">✕</button>
                         </div>
                       ) : (
                         <div className="match-score-display">
@@ -904,30 +1008,102 @@ function GamesPageInner() {
                   ))}
                 </div>
               ))}
+
+              {isAdmin && (
+                <div className="games-setup" style={{ marginTop: 16 }}>
+                  {!addMatchOpen ? (
+                    <button className="btn" onClick={() => setAddMatchOpen(true)}>+ 매치 추가 (선수 잘못 넣었을 때)</button>
+                  ) : (
+                    <>
+                      <p className="games-setup-label">라운드 번호 및 4명 선택</p>
+                      <div className="create-options">
+                        <div className="field">
+                          <label>라운드 번호</label>
+                          <input type="number" min={1} value={addMatchForm.round} onChange={e => setAddMatchForm({ ...addMatchForm, round: e.target.value })} />
+                        </div>
+                      </div>
+                      <div className="create-options">
+                        <div className="field">
+                          <label>팀1 - 선수1</label>
+                          <select value={addMatchForm.p1} onChange={e => setAddMatchForm({ ...addMatchForm, p1: e.target.value })}>
+                            <option value="">선택</option>
+                            {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                          </select>
+                        </div>
+                        <div className="field">
+                          <label>팀1 - 선수2</label>
+                          <select value={addMatchForm.p2} onChange={e => setAddMatchForm({ ...addMatchForm, p2: e.target.value })}>
+                            <option value="">선택</option>
+                            {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="create-options">
+                        <div className="field">
+                          <label>팀2 - 선수1</label>
+                          <select value={addMatchForm.p3} onChange={e => setAddMatchForm({ ...addMatchForm, p3: e.target.value })}>
+                            <option value="">선택</option>
+                            {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                          </select>
+                        </div>
+                        <div className="field">
+                          <label>팀2 - 선수2</label>
+                          <select value={addMatchForm.p4} onChange={e => setAddMatchForm({ ...addMatchForm, p4: e.target.value })}>
+                            <option value="">선택</option>
+                            {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="modal-actions">
+                        <button className="btn" onClick={() => setAddMatchOpen(false)}>취소</button>
+                        <button className="btn primary" onClick={() => addMatch(activeSession.id)}>추가</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
           {sessionTab === 'ranking' && (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr><th>순위</th><th>이름</th><th>승</th><th>무</th><th>패</th><th>승점</th><th>득실</th></tr>
-                </thead>
-                <tbody>
-                  {activeStats.map((s, i) => (
-                    <tr key={s.name}>
-                      <td className="rank-num">{i + 1}</td>
-                      <td className="name-cell">{s.name}</td>
-                      <td>{s.wins}</td>
-                      <td>{s.draws}</td>
-                      <td>{s.losses}</td>
-                      <td className="ledger-total">{s.points}P</td>
-                      <td>{s.diff > 0 ? `+${s.diff}` : s.diff}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {activeStats.length === 0 && <div className="empty">아직 결과가 입력된 경기가 없어요.</div>}
+            <div>
+              {isAdmin && (
+                <div className="modal-actions" style={{ justifyContent: 'flex-start', marginBottom: 12 }}>
+                  {activeSession.is_finalized ? (
+                    <button className="btn" onClick={() => finalizeSession(activeSession.id, false)}>순위확정 취소</button>
+                  ) : (
+                    <button className="btn primary" onClick={() => attemptFinalize(activeSession.id)}>순위 확정</button>
+                  )}
+                </div>
+              )}
+              {finalizeMsg && (
+                <div className="overdue-banner" style={{ marginBottom: 12 }}>
+                  <span className="overdue-banner-icon">⚠</span>
+                  {finalizeMsg}
+                  <button className="btn" style={{ marginLeft: 'auto' }} onClick={() => setFinalizeMsg(null)}>닫기</button>
+                </div>
+              )}
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th>순위</th><th>이름</th><th>승</th><th>무</th><th>패</th><th>승점</th><th>득실</th></tr>
+                  </thead>
+                  <tbody>
+                    {activeStats.map((s, i) => (
+                      <tr key={s.name}>
+                        <td className="rank-num">{i + 1}</td>
+                        <td className="name-cell">{s.name}</td>
+                        <td>{s.wins}</td>
+                        <td>{s.draws}</td>
+                        <td>{s.losses}</td>
+                        <td className="ledger-total">{s.points}P</td>
+                        <td>{s.diff > 0 ? `+${s.diff}` : s.diff}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {activeStats.length === 0 && <div className="empty">아직 결과가 입력된 경기가 없어요.</div>}
+              </div>
             </div>
           )}
         </div>

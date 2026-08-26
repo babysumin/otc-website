@@ -26,6 +26,8 @@ export default function GalleryPage() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [preview, setPreview] = useState<MediaItem | null>(null)
+  const [moveForm, setMoveForm] = useState({ quarter: '', event: '' })
+  const [moveOpen, setMoveOpen] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [uploadQuarter, setUploadQuarter] = useState('26Q3')
   const [uploadEvent, setUploadEvent] = useState('')
@@ -99,6 +101,14 @@ export default function GalleryPage() {
     query = targetQuarter === null ? query.is('quarter', null) : query.eq('quarter', targetQuarter)
     query = targetOldEvent === null ? query.is('event_name', null) : query.eq('event_name', targetOldEvent)
     await query
+    fetchItems()
+  }
+
+  async function moveItem(item: MediaItem, newQuarter: string, newEvent: string) {
+    const q = newQuarter.trim() || null
+    const e = newEvent.trim() || null
+    await supabase.from('gallery_items').update({ quarter: q, event_name: e }).eq('id', item.id)
+    setPreview(null)
     fetchItems()
   }
 
@@ -214,10 +224,10 @@ export default function GalleryPage() {
                     onClick={() => { if (!draggingId) setPreview(item) }}
                   >
                     {item.isVideo ? (
-                      <video src={item.url} className="gallery-thumb" muted />
+                      <div className="gallery-video-placeholder" />
                     ) : (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={item.url} alt="" className="gallery-thumb" />
+                      <img src={item.url} alt="" className="gallery-thumb" loading="lazy" />
                     )}
                     {item.isVideo && <span className="gallery-video-badge">▶</span>}
                   </div>
@@ -260,7 +270,7 @@ export default function GalleryPage() {
       )}
 
       {preview && (
-        <div className="modal-overlay show" onClick={e => { if (e.target === e.currentTarget) setPreview(null) }}>
+        <div className="modal-overlay show" onClick={e => { if (e.target === e.currentTarget) { setPreview(null); setMoveOpen(false) } }}>
           <div className="gallery-preview">
             {preview.isVideo ? (
               <video src={preview.url} controls autoPlay className="gallery-preview-media" />
@@ -268,9 +278,32 @@ export default function GalleryPage() {
               // eslint-disable-next-line @next/next/no-img-element
               <img src={preview.url} alt="" className="gallery-preview-media" />
             )}
+            {isAdmin && moveOpen && (
+              <div className="move-form">
+                <div className="field">
+                  <label>분기</label>
+                  <input value={moveForm.quarter} onChange={e => setMoveForm({ ...moveForm, quarter: e.target.value })} placeholder="예: 26Q3" />
+                </div>
+                <div className="field">
+                  <label>이벤트명</label>
+                  <input value={moveForm.event} onChange={e => setMoveForm({ ...moveForm, event: e.target.value })} placeholder="예: 친선경기" />
+                </div>
+              </div>
+            )}
             <div className="gallery-preview-actions">
-              {isAdmin && <button className="btn" style={{ color: '#c2492c' }} onClick={() => handleDelete(preview)}>삭제</button>}
-              <button className="btn" onClick={() => setPreview(null)}>닫기</button>
+              {isAdmin && !moveOpen && (
+                <button className="btn" onClick={() => { setMoveForm({ quarter: preview.quarter === UNSPECIFIED_Q ? '' : preview.quarter, event: preview.event === UNSPECIFIED_EVENT ? '' : preview.event }); setMoveOpen(true) }}>
+                  분기/이벤트 수정
+                </button>
+              )}
+              {isAdmin && moveOpen && (
+                <>
+                  <button className="btn" onClick={() => setMoveOpen(false)}>취소</button>
+                  <button className="btn primary" onClick={() => moveItem(preview, moveForm.quarter, moveForm.event)}>이동</button>
+                </>
+              )}
+              {isAdmin && !moveOpen && <button className="btn" style={{ color: '#c2492c' }} onClick={() => handleDelete(preview)}>삭제</button>}
+              <button className="btn" onClick={() => { setPreview(null); setMoveOpen(false) }}>닫기</button>
             </div>
           </div>
         </div>
