@@ -54,7 +54,7 @@ export default function TopNav() {
   const { isAdmin, loginOpen, setLoginOpen, loginPin, setLoginPin, loginErr, handleLogin, handleLogout } = useAuth()
   const [logoError, setLogoError] = useState(false)
   const [navMenuOpen, setNavMenuOpen] = useState(false)
-  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchDropdownOpen, setSearchDropdownOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<{ label: string; count: number; href: string }[] | null>(null)
   const [searching, setSearching] = useState(false)
@@ -100,12 +100,36 @@ export default function TopNav() {
           </div>
         </Link>
         <div className="header-actions">
-          <input
-            className="header-search-input"
-            placeholder="search"
-            onFocus={() => setSearchOpen(true)}
-            readOnly
-          />
+          <div className="header-search-wrap">
+            <input
+              className="header-search-input"
+              placeholder="search"
+              value={searchQuery}
+              onFocus={() => setSearchDropdownOpen(true)}
+              onChange={e => { setSearchQuery(e.target.value); setSearchDropdownOpen(true); runGlobalSearch(e.target.value) }}
+              onBlur={() => setTimeout(() => setSearchDropdownOpen(false), 150)}
+            />
+            {searchDropdownOpen && (searching || searchResults) && (
+              <div className="header-search-dropdown">
+                {searching && <p className="upload-hint">검색 중...</p>}
+                {searchResults && (
+                  <div className="search-results-list">
+                    {searchResults.map(r => (
+                      <Link
+                        key={r.label}
+                        href={r.href}
+                        className="search-result-row"
+                        onClick={() => { setSearchDropdownOpen(false); setSearchQuery(''); setSearchResults(null) }}
+                      >
+                        <span>{r.label}</span>
+                        <span className="search-result-count">{r.count}건</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
           <button className="btn nav-menu-btn" onClick={() => setNavMenuOpen(true)}>☰ 메뉴</button>
           {isAdmin ? (
             <button className="btn" onClick={handleLogout}>로그아웃</button>
@@ -134,41 +158,6 @@ export default function TopNav() {
             </div>
             <div className="modal-actions">
               <button className="btn" onClick={() => setNavMenuOpen(false)}>닫기</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {searchOpen && (
-        <div className="modal-overlay show" onClick={e => { if (e.target === e.currentTarget) setSearchOpen(false) }}>
-          <div className="modal modal-wide">
-            <h2>통합 검색</h2>
-            <div className="field">
-              <input
-                autoFocus
-                value={searchQuery}
-                onChange={e => { setSearchQuery(e.target.value); runGlobalSearch(e.target.value) }}
-                placeholder="search"
-              />
-            </div>
-            {searching && <p className="upload-hint">검색 중...</p>}
-            {searchResults && (
-              <div className="search-results-list">
-                {searchResults.map(r => (
-                  <Link
-                    key={r.label}
-                    href={r.href}
-                    className="search-result-row"
-                    onClick={() => { setSearchOpen(false); setSearchQuery(''); setSearchResults(null) }}
-                  >
-                    <span>{r.label}</span>
-                    <span className="search-result-count">{r.count}건</span>
-                  </Link>
-                ))}
-              </div>
-            )}
-            <div className="modal-actions">
-              <button className="btn" onClick={() => setSearchOpen(false)}>닫기</button>
             </div>
           </div>
         </div>
