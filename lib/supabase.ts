@@ -21,6 +21,7 @@ export type Member = {
   is_officer: boolean
   gender: Gender
   ranking_group: 'A' | 'B' | null
+  fee_exempt: boolean
   q1_paid: FeeStatus
   q2_paid: FeeStatus
   q3_paid: FeeStatus

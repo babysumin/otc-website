@@ -179,14 +179,6 @@ export default function AccountPage() {
         <div className="stat"><div className="label">잔액</div><div className={`value ${balance < 0 ? 'warn' : ''}`}>{fmt(balance)}</div></div>
       </div>
 
-      <p className="upload-hint" style={{ marginBottom: 8 }}>아래 분기별 회비는 멤버십 장부의 월별 납부 내역(게스트·동문 포함 전체)을 자동 합산한 금액이에요.</p>
-      <div className="stats">
-        <div className="stat"><div className="label">Q1 Membership Fee</div><div className="value">${quarterFeeTotals[0].toLocaleString('en-US')}</div></div>
-        <div className="stat"><div className="label">Q2 Membership Fee</div><div className="value">${quarterFeeTotals[1].toLocaleString('en-US')}</div></div>
-        <div className="stat"><div className="label">Q3 Membership Fee</div><div className="value">${quarterFeeTotals[2].toLocaleString('en-US')}</div></div>
-        <div className="stat"><div className="label">Q4 Membership Fee</div><div className="value">${quarterFeeTotals[3].toLocaleString('en-US')}</div></div>
-      </div>
-
       <div className="toolbar">
         <div className="search">
           <input placeholder="내용, 담당자, 메모 검색" value={search} onChange={e => setSearch(e.target.value)} />
@@ -205,6 +197,17 @@ export default function AccountPage() {
             </tr>
           </thead>
           <tbody>
+            {(['Q1', 'Q2', 'Q3', 'Q4'] as const).map((q, i) => (
+              <tr key={q} className="ledger-summary-row">
+                <td>-</td>
+                <td>-</td>
+                <td className="name-cell">{q} Membership Fee</td>
+                <td><span className="amount-in">{fmt(quarterFeeTotals[i])}</span></td>
+                <td>-</td>
+                <td className="memo-cell">멤버십 장부에서 자동 합산 (게스트·동문 포함)</td>
+                <td></td>
+              </tr>
+            ))}
             {filtered.map(t => (
               <tr key={t.id}>
                 <td>{t.date || '-'}</td>

@@ -32,9 +32,9 @@ function MembersPageInner() {
   const [statusTab, setStatusTab] = useState<'all' | MemberStatus>('all')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<Member | null>(null)
-  const [form, setForm] = useState({ name: '', join_date: '', status: 'member' as MemberStatus, gender: '' as 'M' | 'F' | '' })
+  const [form, setForm] = useState({ name: '', join_date: '', status: 'member' as MemberStatus, gender: '' as 'M' | 'F' | '', fee_exempt: false })
   const [nameErr, setNameErr] = useState(false)
-  const [unpaidNames, setUnpaidNames] = useState<string[]>([])
+  const [unpaidNames, setUnpaidNames] = useState<{ id: string; name: string }[]>([])
 
   useEffect(() => {
     fetchMembers()
@@ -47,7 +47,7 @@ function MembersPageInner() {
     const now = new Date()
     const quarterIdx = Math.floor(now.getMonth() / 3)
     const months = QUARTER_MONTHS[quarterIdx]
-    const { data: memberRows } = await supabase.from('members').select('name').eq('status', 'member')
+    const { data: memberRows } = await supabase.from('members').select('id, name, fee_exempt').eq('status', 'member')
     const { data: ledgerRows } = await supabase.from('membership_ledger').select(`member_name, ${months.join(', ')}`)
     if (!memberRows || !ledgerRows) return
     const paidSum: Record<string, number> = {}
@@ -55,8 +55,16 @@ function MembersPageInner() {
       const sum = months.reduce((s, m) => s + (Number(r[m]) || 0), 0)
       paidSum[r.member_name] = sum
     })
-    const unpaid = memberRows.filter((m: any) => (paidSum[m.name] || 0) < FEE_PER_QUARTER).map((m: any) => m.name)
+    const unpaid = memberRows
+      .filter((m: any) => !m.fee_exempt && (paidSum[m.name] || 0) < FEE_PER_QUARTER)
+      .map((m: any) => ({ id: m.id, name: m.name }))
     setUnpaidNames(unpaid)
+  }
+
+  async function dismissOverdue(memberId: string) {
+    if (!confirm('이 회원은 이번 분기 회비 미납 경고에서 계속 제외할까요? (특별한 회비 조건이 있는 경우 사용해주세요)')) return
+    await supabase.from('members').update({ fee_exempt: true }).eq('id', memberId)
+    fetchOverdue()
   }
 
   async function fetchMembers() {
@@ -79,7 +87,7 @@ function MembersPageInner() {
 
   function openEdit(m: Member) {
     setEditing(m)
-    setForm({ name: m.name, join_date: m.join_date || '', status: m.status, gender: m.gender || '' })
+    setForm({ name: m.name, join_date: m.join_date || '', status: m.status, gender: m.gender || '', fee_exempt: (m as any).fee_exempt || false })
     setNameErr(false)
     setModalOpen(true)
   }
@@ -92,9 +100,9 @@ function MembersPageInner() {
     }
     const { error } = await supabase
       .from('members')
-      .update({ name: form.name, join_date: form.join_date, gender: form.gender || null })
+      .update({ name: form.name, join_date: form.join_date, gender: form.gender || null, fee_exempt: form.fee_exempt })
       .eq('id', editing.id)
-    if (!error) fetchMembers()
+    if (!error) { fetchMembers(); fetchOverdue() }
     setModalOpen(false)
   }
 
@@ -149,10 +157,21 @@ function MembersPageInner() {
         const daysSince = Math.floor((now.getTime() - quarterStart.getTime()) / 86400000)
         if (daysSince > OVERDUE_THRESHOLD_DAYS && unpaidNames.length > 0) {
           return (
-            <div className="overdue-banner">
-              <span className="overdue-banner-icon">⚠</span>
-              이번 분기 시작 후 {daysSince}일 지났어요. 아직 회비를 안 내신 정회원이 <strong>{unpaidNames.length}명</strong> 있어요.
-              <span className="overdue-banner-names">({unpaidNames.slice(0, 6).join(', ')}{unpaidNames.length > 6 ? ' 외' : ''})</span>
+            <div className="overdue-banner overdue-banner-block">
+              <div>
+                <span className="overdue-banner-icon">⚠</span>
+                이번 분기 시작 후 {daysSince}일 지났어요. 아직 회비를 안 내신 정회원이 <strong>{unpaidNames.length}명</strong> 있어요.
+              </div>
+              <div className="overdue-banner-name-list">
+                {unpaidNames.map(u => (
+                  <span key={u.id} className="overdue-name-chip">
+                    {u.name}
+                    {isAdmin && (
+                      <button className="overdue-dismiss-btn" onClick={() => dismissOverdue(u.id)} title="이 회원은 미납 경고에서 계속 제외">✕</button>
+                    )}
+                  </span>
+                ))}
+              </div>
             </div>
           )
         }
@@ -232,6 +251,12 @@ function MembersPageInner() {
             <div className="field">
               <label>가입 시기</label>
               <input value={form.join_date} onChange={e => setForm({ ...form, join_date: e.target.value })} placeholder="예: 26Q1" />
+            </div>
+            <div className="field">
+              <label className="checkbox-label">
+                <input type="checkbox" checked={form.fee_exempt} onChange={e => setForm({ ...form, fee_exempt: e.target.checked })} />
+                회비 미납 경고에서 제외 (특별한 회비 조건이 있는 경우)
+              </label>
             </div>
             <div className="modal-actions">
               <button className="btn" style={{ marginRight: 'auto', color: '#c2492c' }} onClick={deleteMember}>삭제</button>
