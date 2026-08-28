@@ -39,6 +39,9 @@ function MembershipLedgerPageInner() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'member' | 'guest' | 'alumni'>('all')
+  const [addOpen, setAddOpen] = useState(false)
+  const [addForm, setAddForm] = useState({ name: '', join_date: '', status: 'member' as MemberStatus, gender: '' as 'M' | 'F' | '', invitor: '' })
+  const [addNameErr, setAddNameErr] = useState(false)
 
   useEffect(() => {
     const q = searchParams.get('q')
@@ -88,6 +91,30 @@ function MembershipLedgerPageInner() {
     if (!info) return
     setMemberMap(prev => ({ ...prev, [memberName]: { ...prev[memberName], status } }))
     await supabase.from('members').update({ status }).eq('id', info.id)
+  }
+
+  async function addNewMember() {
+    if (!addForm.name.trim()) {
+      setAddNameErr(true)
+      return
+    }
+    const { error: memberErr } = await supabase.from('members').insert({
+      name: addForm.name,
+      join_date: addForm.join_date,
+      status: addForm.status,
+      gender: addForm.gender || null,
+    })
+    if (memberErr) return
+    await supabase.from('membership_ledger').insert({
+      member_name: addForm.name,
+      status: addForm.status,
+      invitor: addForm.invitor || null,
+    })
+    setAddOpen(false)
+    setAddForm({ name: '', join_date: '', status: 'member', gender: '', invitor: '' })
+    setAddNameErr(false)
+    fetchRows()
+    fetchMemberInfo()
   }
 
   async function updateCell(row: LedgerRow, monthKey: keyof LedgerRow, value: string) {
@@ -155,6 +182,7 @@ function MembershipLedgerPageInner() {
 
       <div className="section-header">
         <h2 className="section-title">멤버십 장부 (월별 납부 내역)</h2>
+        <button className="btn primary" onClick={() => setAddOpen(true)}>+ 회원 추가</button>
       </div>
 
       <div className="stats">
@@ -295,6 +323,47 @@ function MembershipLedgerPageInner() {
         </table>
         {!loading && filtered.length === 0 && <div className="empty">내역이 없어요.</div>}
       </div>
+
+      {addOpen && (
+        <div className="modal-overlay show" onClick={e => { if (e.target === e.currentTarget) setAddOpen(false) }}>
+          <div className="modal">
+            <h2>회원 추가</h2>
+            <div className="field">
+              <label>이름</label>
+              <input value={addForm.name} onChange={e => setAddForm({ ...addForm, name: e.target.value })} placeholder="홍길동" />
+              {addNameErr && <div className="err">이름을 입력해주세요</div>}
+            </div>
+            <div className="field">
+              <label>상태</label>
+              <select value={addForm.status} onChange={e => setAddForm({ ...addForm, status: e.target.value as MemberStatus })}>
+                <option value="member">정회원</option>
+                <option value="guest">게스트</option>
+                <option value="alumni">동문</option>
+              </select>
+            </div>
+            <div className="field">
+              <label>성별</label>
+              <select value={addForm.gender} onChange={e => setAddForm({ ...addForm, gender: e.target.value as 'M' | 'F' | '' })}>
+                <option value="">선택 안 함</option>
+                <option value="M">남</option>
+                <option value="F">여</option>
+              </select>
+            </div>
+            <div className="field">
+              <label>가입 시기</label>
+              <input value={addForm.join_date} onChange={e => setAddForm({ ...addForm, join_date: e.target.value })} placeholder="예: 26Q3" />
+            </div>
+            <div className="field">
+              <label>초대자</label>
+              <input value={addForm.invitor} onChange={e => setAddForm({ ...addForm, invitor: e.target.value })} placeholder="예: 김근휘 (선택)" />
+            </div>
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setAddOpen(false)}>취소</button>
+              <button className="btn primary" onClick={addNewMember}>추가</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

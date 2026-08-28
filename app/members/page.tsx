@@ -77,13 +77,6 @@ function MembersPageInner() {
     await supabase.from('members').update({ is_officer: updated.is_officer }).eq('id', m.id)
   }
 
-  function openAdd() {
-    setEditing(null)
-    setForm({ name: '', join_date: '', status: 'member', gender: '' })
-    setNameErr(false)
-    setModalOpen(true)
-  }
-
   function openEdit(m: Member) {
     setEditing(m)
     setForm({ name: m.name, join_date: m.join_date || '', status: m.status, gender: m.gender || '' })
@@ -92,25 +85,16 @@ function MembersPageInner() {
   }
 
   async function saveMember() {
+    if (!editing) return
     if (!form.name.trim()) {
       setNameErr(true)
       return
     }
-    if (editing) {
-      const { error } = await supabase
-        .from('members')
-        .update({ name: form.name, join_date: form.join_date, status: form.status, gender: form.gender || null })
-        .eq('id', editing.id)
-      if (!error) fetchMembers()
-    } else {
-      const { error } = await supabase.from('members').insert({
-        name: form.name,
-        join_date: form.join_date,
-        status: form.status,
-        gender: form.gender || null,
-      })
-      if (!error) fetchMembers()
-    }
+    const { error } = await supabase
+      .from('members')
+      .update({ name: form.name, join_date: form.join_date, gender: form.gender || null })
+      .eq('id', editing.id)
+    if (!error) fetchMembers()
     setModalOpen(false)
   }
 
@@ -156,7 +140,6 @@ function MembersPageInner() {
 
       <div className="section-header">
         <h2 className="section-title">회원</h2>
-        {isAdmin && <button className="btn primary" onClick={openAdd}>+ 회원 추가</button>}
       </div>
 
       {(() => {
@@ -231,20 +214,13 @@ function MembersPageInner() {
       {modalOpen && (
         <div className="modal-overlay show" onClick={e => { if (e.target === e.currentTarget) setModalOpen(false) }}>
           <div className="modal">
-            <h2>{editing ? '회원 정보 수정' : '회원 추가'}</h2>
+            <h2>회원 정보 수정</h2>
             <div className="field">
               <label>이름</label>
               <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="홍길동" />
               {nameErr && <div className="err">이름을 입력해주세요</div>}
             </div>
-            <div className="field">
-              <label>상태</label>
-              <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value as MemberStatus })}>
-                <option value="member">정회원</option>
-                <option value="guest">게스트</option>
-                <option value="alumni">동문</option>
-              </select>
-            </div>
+            <p className="upload-hint">상태(정회원/게스트/동문)는 멤버십 장부 탭에서 수정할 수 있어요.</p>
             <div className="field">
               <label>성별</label>
               <select value={form.gender} onChange={e => setForm({ ...form, gender: e.target.value as 'M' | 'F' | '' })}>
@@ -258,7 +234,7 @@ function MembersPageInner() {
               <input value={form.join_date} onChange={e => setForm({ ...form, join_date: e.target.value })} placeholder="예: 26Q1" />
             </div>
             <div className="modal-actions">
-              {editing && <button className="btn" style={{ marginRight: 'auto', color: '#c2492c' }} onClick={deleteMember}>삭제</button>}
+              <button className="btn" style={{ marginRight: 'auto', color: '#c2492c' }} onClick={deleteMember}>삭제</button>
               <button className="btn" onClick={() => setModalOpen(false)}>취소</button>
               <button className="btn primary" onClick={saveMember}>저장</button>
             </div>
