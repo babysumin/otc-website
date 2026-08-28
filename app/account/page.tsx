@@ -4,13 +4,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Transaction } from '@/lib/transaction-type'
 import { useAuth } from '@/lib/useAuth'
+import { useMemberAuth } from '@/lib/useMemberAuth'
 import TopNav from '@/components/TopNav'
 
 export default function AccountPage() {
   const { isAdmin } = useAuth()
-  const [unlocked, setUnlocked] = useState(false)
-  const [pwInput, setPwInput] = useState('')
-  const [pwErr, setPwErr] = useState(false)
+  const { isMember, pwInput, setPwInput, pwErr, checkPassword } = useMemberAuth()
   const [txns, setTxns] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -19,26 +18,31 @@ export default function AccountPage() {
   const [editing, setEditing] = useState<Transaction | null>(null)
   const [form, setForm] = useState({ date: '', person: '', contents: '', income: '', expense: '', note: '' })
   const [contentsErr, setContentsErr] = useState(false)
+  const [quarterFeeTotals, setQuarterFeeTotals] = useState<[number, number, number, number]>([0, 0, 0, 0])
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && sessionStorage.getItem('otc_account_unlocked') === '1') {
-      setUnlocked(true)
-    }
-  }, [])
+    if (isMember || isAdmin) fetchTxns()
+  }, [isMember, isAdmin])
 
-  function checkPassword() {
-    if (pwInput === 'OTC') {
-      setUnlocked(true)
-      setPwErr(false)
-      sessionStorage.setItem('otc_account_unlocked', '1')
-    } else {
-      setPwErr(true)
-    }
+  useEffect(() => {
+    if (isMember || isAdmin) fetchQuarterFeeTotals()
+  }, [isMember, isAdmin])
+
+  async function fetchQuarterFeeTotals() {
+    // 게스트/동문 포함, 멤버십 장부에 기록된 모든 회원의 월별 납부액을 분기별로 합산
+    const { data } = await supabase
+      .from('membership_ledger')
+      .select('jan, feb, mar, apr, may, jun, jul, aug, sep, oct, nov, dec')
+    if (!data) return
+    const totals: [number, number, number, number] = [0, 0, 0, 0]
+    data.forEach((r: any) => {
+      totals[0] += (Number(r.jan) || 0) + (Number(r.feb) || 0) + (Number(r.mar) || 0)
+      totals[1] += (Number(r.apr) || 0) + (Number(r.may) || 0) + (Number(r.jun) || 0)
+      totals[2] += (Number(r.jul) || 0) + (Number(r.aug) || 0) + (Number(r.sep) || 0)
+      totals[3] += (Number(r.oct) || 0) + (Number(r.nov) || 0) + (Number(r.dec) || 0)
+    })
+    setQuarterFeeTotals(totals)
   }
-
-  useEffect(() => {
-    if (unlocked) fetchTxns()
-  }, [unlocked])
 
   async function fetchTxns() {
     setLoading(true)
@@ -135,7 +139,7 @@ export default function AccountPage() {
 
   const fmt = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-  if (!unlocked) {
+  if (!isMember && !isAdmin) {
     return (
       <div className="wrap">
         <TopNav />
@@ -143,7 +147,7 @@ export default function AccountPage() {
           <h2 className="section-title">장부 (수입/지출)</h2>
         </div>
         <div className="password-gate">
-          <p>장부는 비밀번호를 입력해야 볼 수 있어요.</p>
+          <p>장부는 멤버 비밀번호를 입력해야 볼 수 있어요.</p>
           <div className="password-gate-row">
             <input
               type="password"
@@ -173,6 +177,14 @@ export default function AccountPage() {
         <div className="stat"><div className="label">총 수입</div><div className="value">{fmt(totalIncome)}</div></div>
         <div className="stat"><div className="label">총 지출</div><div className="value">{fmt(totalExpense)}</div></div>
         <div className="stat"><div className="label">잔액</div><div className={`value ${balance < 0 ? 'warn' : ''}`}>{fmt(balance)}</div></div>
+      </div>
+
+      <p className="upload-hint" style={{ marginBottom: 8 }}>아래 분기별 회비는 멤버십 장부의 월별 납부 내역(게스트·동문 포함 전체)을 자동 합산한 금액이에요.</p>
+      <div className="stats">
+        <div className="stat"><div className="label">Q1 Membership Fee</div><div className="value">${quarterFeeTotals[0].toLocaleString('en-US')}</div></div>
+        <div className="stat"><div className="label">Q2 Membership Fee</div><div className="value">${quarterFeeTotals[1].toLocaleString('en-US')}</div></div>
+        <div className="stat"><div className="label">Q3 Membership Fee</div><div className="value">${quarterFeeTotals[2].toLocaleString('en-US')}</div></div>
+        <div className="stat"><div className="label">Q4 Membership Fee</div><div className="value">${quarterFeeTotals[3].toLocaleString('en-US')}</div></div>
       </div>
 
       <div className="toolbar">
