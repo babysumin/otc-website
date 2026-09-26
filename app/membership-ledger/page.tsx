@@ -202,7 +202,7 @@ function MembershipLedgerPageInner() {
         </select>
       </div>
 
-      <div className="table-wrap">
+      <div className="table-wrap ledger-scroll-wrap">
         <table className="sticky-header-table">
           <thead>
             <tr>
