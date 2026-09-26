@@ -131,6 +131,7 @@ export default function TopNav() {
             )}
           </div>
           <button className="btn nav-menu-btn" onClick={() => setNavMenuOpen(true)}>☰ 메뉴</button>
+          <button className="btn icon-only-btn" onClick={() => window.location.reload()} title="새로고침">↻</button>
           {isAdmin ? (
             <button className="btn" onClick={handleLogout}>로그아웃</button>
           ) : (
