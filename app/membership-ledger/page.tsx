@@ -203,7 +203,7 @@ function MembershipLedgerPageInner() {
       </div>
 
       <div className="table-wrap">
-        <table>
+        <table className="sticky-header-table">
           <thead>
             <tr>
               <th rowSpan={2} className="sticky-col-head">이름</th><th rowSpan={2}>성별</th><th rowSpan={2}>상태</th>
