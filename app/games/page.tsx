@@ -483,6 +483,23 @@ function GamesPageInner() {
     if (q) setSelectedPlayer(q)
   }, [])
 
+  // 실시간 반영: 다른 사람이 점수를 입력하거나 대회를 만들면 자동으로 새로고침
+  useEffect(() => {
+    const channel = supabase
+      .channel('games-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => {
+        fetchAll()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'match_sessions' }, () => {
+        fetchAll()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
+
   useEffect(() => {
     if (!titleTouched) {
       const today = new Date()
