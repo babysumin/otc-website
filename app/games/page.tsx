@@ -1266,7 +1266,7 @@ function GamesPageInner() {
                       <table>
                         <thead>
                           <tr>
-                            <th>순위</th><th>이름</th><th>승점</th><th>승/무/패</th><th>득실</th><th>승률/참가</th>
+                            <th>순위</th><th>이름</th><th>승점</th><th>승/무/패</th><th>승률/참가</th><th>득실</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1276,8 +1276,8 @@ function GamesPageInner() {
                               <td className="name-cell player-name-link" onClick={() => setSelectedPlayer(s.name)}>{s.name}</td>
                               <td className="ledger-total">{s.points}P</td>
                               <td>{s.wins} / {s.draws} / {s.losses}</td>
-                              <td>{s.diff > 0 ? `+${s.diff}` : s.diff}</td>
                               <td>{s.games > 0 ? `${((s.wins / s.games) * 100).toFixed(0)}%` : '-'} / {aEventCounts[s.name] || 0}회</td>
+                              <td>{s.diff > 0 ? `+${s.diff}` : s.diff}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1290,7 +1290,7 @@ function GamesPageInner() {
                       <table>
                         <thead>
                           <tr>
-                            <th>순위</th><th>이름</th><th>승점</th><th>승/무/패</th><th>득실</th><th>승률/참가</th>
+                            <th>순위</th><th>이름</th><th>승점</th><th>승/무/패</th><th>승률/참가</th><th>득실</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1300,8 +1300,8 @@ function GamesPageInner() {
                               <td className="name-cell player-name-link" onClick={() => setSelectedPlayer(s.name)}>{s.name}</td>
                               <td className="ledger-total">{s.points}P</td>
                               <td>{s.wins} / {s.draws} / {s.losses}</td>
-                              <td>{s.diff > 0 ? `+${s.diff}` : s.diff}</td>
                               <td>{s.games > 0 ? `${((s.wins / s.games) * 100).toFixed(0)}%` : '-'} / {bEventCounts[s.name] || 0}회</td>
+                              <td>{s.diff > 0 ? `+${s.diff}` : s.diff}</td>
                             </tr>
                           ))}
                         </tbody>
