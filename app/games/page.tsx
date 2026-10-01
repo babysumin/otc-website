@@ -782,7 +782,6 @@ function GamesPageInner() {
   const [collapsedQuarters, setCollapsedQuarters] = useState<Set<string>>(new Set())
   const [collapsedRankingQuarters, setCollapsedRankingQuarters] = useState<Set<string>>(new Set())
   // 분기마다 독립적으로 전체/A그룹/B그룹 필터를 기억
-  const [quarterGroupFilter, setQuarterGroupFilter] = useState<Record<string, 'all' | 'A' | 'B'>>({})
 
   function toggleQuarterCollapse(quarter: string) {
     setCollapsedQuarters(prev => {
@@ -821,21 +820,22 @@ function GamesPageInner() {
     return groups
   }, [allMatches, sessionQuarterMap])
 
-  // 각 분기마다, 그 분기에 저장된 필터값으로 걸러서 통계 계산
+  // 각 분기마다 A조/B조 통계를 각각 따로 계산
   const rankingByQuarter = useMemo(() => {
     return Object.entries(matchesByQuarter)
       .map(([quarter, matches]) => {
-        const filter = quarterGroupFilter[quarter] || 'all'
-        const filtered = filter === 'all' ? matches : matches.filter(m => m.session_id && sessionGroupMap[m.session_id] === filter)
+        const aMatches = matches.filter(m => m.session_id && sessionGroupMap[m.session_id] === 'A')
+        const bMatches = matches.filter(m => m.session_id && sessionGroupMap[m.session_id] === 'B')
         return {
           quarter,
-          filter,
-          stats: computeStats(filtered),
-          eventCounts: computeEventCounts(filtered),
+          aStats: computeStats(aMatches),
+          aEventCounts: computeEventCounts(aMatches),
+          bStats: computeStats(bMatches),
+          bEventCounts: computeEventCounts(bMatches),
         }
       })
       .sort((a, b) => b.quarter.localeCompare(a.quarter))
-  }, [matchesByQuarter, quarterGroupFilter, sessionGroupMap])
+  }, [matchesByQuarter, sessionGroupMap])
 
   // 10번: 개인별 전적
   const playerMatches = selectedPlayer
@@ -1223,17 +1223,15 @@ function GamesPageInner() {
               <div className="table-wrap">
                 <table>
                   <thead>
-                    <tr><th>순위</th><th>이름</th><th>승</th><th>무</th><th>패</th><th>승점</th><th>득실</th></tr>
+                    <tr><th>순위</th><th>이름</th><th>승점</th><th>승/무/패</th><th>득실</th></tr>
                   </thead>
                   <tbody>
                     {activeStats.map((s, i) => (
                       <tr key={s.name}>
                         <td className="rank-num">{i + 1}</td>
                         <td className="name-cell">{s.name}</td>
-                        <td>{s.wins}</td>
-                        <td>{s.draws}</td>
-                        <td>{s.losses}</td>
                         <td className="ledger-total">{s.points}P</td>
+                        <td>{s.wins} / {s.draws} / {s.losses}</td>
                         <td>{s.diff > 0 ? `+${s.diff}` : s.diff}</td>
                       </tr>
                     ))}
@@ -1248,56 +1246,67 @@ function GamesPageInner() {
 
       {tab === 'ranking' && !selectedPlayer && (
         <>
-          <p className="ranking-note">승리 +{WIN_POINTS}P / 무승부 +{DRAW_POINTS}P / 패배 +{LOSE_POINTS}P 기준으로 계산돼요. 이름을 클릭하면 개인별 전적을 볼 수 있어요. 분기별로 A그룹/B그룹을 따로 필터링해서 볼 수 있어요.</p>
+          <p className="ranking-note">승리 +{WIN_POINTS}P / 무승부 +{DRAW_POINTS}P / 패배 +{LOSE_POINTS}P 기준으로 계산돼요. 이름을 클릭하면 개인별 전적을 볼 수 있어요. A조/B조 랭킹을 분기 안에서 따로 보여드려요.</p>
 
           <h3 className="subsection-title">분기별 랭킹</h3>
           {rankingByQuarter.length === 0 && <div className="empty">아직 분기별 데이터가 없어요.</div>}
-          {rankingByQuarter.map(({ quarter, filter, stats, eventCounts: qEventCounts }) => {
+          {rankingByQuarter.map(({ quarter, aStats, aEventCounts, bStats, bEventCounts }) => {
             const collapsed = collapsedRankingQuarters.has(quarter)
             return (
               <div key={quarter} className="quarter-session-group">
                 <button className="quarter-toggle" onClick={() => toggleRankingQuarterCollapse(quarter)}>
                   <span className={`quarter-toggle-arrow ${collapsed ? 'collapsed' : ''}`}>▾</span>
                   <span className="gallery-quarter-title" style={{ margin: 0, border: 'none', padding: 0 }}>{quarter}</span>
-                  <span className="quarter-toggle-count">{stats.length}명 참가</span>
+                  <span className="quarter-toggle-count">{aStats.length + bStats.length}명 참가</span>
                 </button>
                 {!collapsed && (
                   <>
-                    <div className="toolbar" style={{ marginTop: 12 }}>
-                      <select
-                        value={filter}
-                        onChange={e => setQuarterGroupFilter(prev => ({ ...prev, [quarter]: e.target.value as 'all' | 'A' | 'B' }))}
-                      >
-                        <option value="all">전체 (A+B 그룹 모두)</option>
-                        <option value="A">A그룹만</option>
-                        <option value="B">B그룹만</option>
-                      </select>
-                    </div>
-                    <div className="table-wrap">
+                    <p className="ranking-group-label">A조</p>
+                    <div className="table-wrap" style={{ marginTop: 8, marginBottom: 20 }}>
                       <table>
                         <thead>
                           <tr>
-                            <th>순위</th><th>이름</th><th>경기수</th><th>승</th><th>무</th><th>패</th><th>승률</th><th>승점</th><th>득실</th><th>이벤트 참가</th>
+                            <th>순위</th><th>이름</th><th>승점</th><th>승/무/패</th><th>득실</th><th>승률/참가</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {stats.map((s, i) => (
+                          {aStats.map((s, i) => (
                             <tr key={s.name}>
                               <td className="rank-num">{i + 1}</td>
                               <td className="name-cell player-name-link" onClick={() => setSelectedPlayer(s.name)}>{s.name}</td>
-                              <td>{s.games}</td>
-                              <td>{s.wins}</td>
-                              <td>{s.draws}</td>
-                              <td>{s.losses}</td>
-                              <td>{s.games > 0 ? `${((s.wins / s.games) * 100).toFixed(1)}%` : '-'}</td>
                               <td className="ledger-total">{s.points}P</td>
+                              <td>{s.wins} / {s.draws} / {s.losses}</td>
                               <td>{s.diff > 0 ? `+${s.diff}` : s.diff}</td>
-                              <td>{qEventCounts[s.name] || 0}회</td>
+                              <td>{s.games > 0 ? `${((s.wins / s.games) * 100).toFixed(0)}%` : '-'} / {aEventCounts[s.name] || 0}회</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                      {stats.length === 0 && <div className="empty">이 필터로는 데이터가 없어요.</div>}
+                      {aStats.length === 0 && <div className="empty">A조 데이터가 없어요.</div>}
+                    </div>
+
+                    <p className="ranking-group-label">B조</p>
+                    <div className="table-wrap" style={{ marginTop: 8 }}>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>순위</th><th>이름</th><th>승점</th><th>승/무/패</th><th>득실</th><th>승률/참가</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {bStats.map((s, i) => (
+                            <tr key={s.name}>
+                              <td className="rank-num">{i + 1}</td>
+                              <td className="name-cell player-name-link" onClick={() => setSelectedPlayer(s.name)}>{s.name}</td>
+                              <td className="ledger-total">{s.points}P</td>
+                              <td>{s.wins} / {s.draws} / {s.losses}</td>
+                              <td>{s.diff > 0 ? `+${s.diff}` : s.diff}</td>
+                              <td>{s.games > 0 ? `${((s.wins / s.games) * 100).toFixed(0)}%` : '-'} / {bEventCounts[s.name] || 0}회</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {bStats.length === 0 && <div className="empty">B조 데이터가 없어요.</div>}
                     </div>
                   </>
                 )}
