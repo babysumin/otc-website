@@ -893,8 +893,8 @@ function GamesPageInner() {
       </div>
 
       <div className="subtabs">
-        <button className={`subtab ${tab === 'sessions' ? 'active' : ''}`} onClick={() => { setTab('sessions'); setSelectedPlayer(null) }}>대회 목록</button>
         {(isMember || isAdmin) && <button className={`subtab ${tab === 'create' ? 'active' : ''}`} onClick={() => setTab('create')}>대회 생성</button>}
+        <button className={`subtab ${tab === 'sessions' ? 'active' : ''}`} onClick={() => { setTab('sessions'); setSelectedPlayer(null) }}>대회 기록</button>
         <button className={`subtab ${tab === 'ranking' ? 'active' : ''}`} onClick={() => { setTab('ranking'); setSelectedPlayer(null) }}>전체 랭킹</button>
       </div>
 

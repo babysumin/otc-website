@@ -339,8 +339,8 @@ export default function GamesUnofficialPage() {
       </p>
 
       <div className="subtabs">
-        <button className={`subtab ${tab === 'matches' ? 'active' : ''}`} onClick={() => setTab('matches')}>기록</button>
-        {(isMember || isAdmin) && <button className={`subtab ${tab === 'create' ? 'active' : ''}`} onClick={() => setTab('create')}>생성</button>}
+        {(isMember || isAdmin) && <button className={`subtab ${tab === 'create' ? 'active' : ''}`} onClick={() => setTab('create')}>경기 생성</button>}
+        <button className={`subtab ${tab === 'matches' ? 'active' : ''}`} onClick={() => setTab('matches')}>경기 기록</button>
         <button className={`subtab ${tab === 'ranking' ? 'active' : ''}`} onClick={() => setTab('ranking')}>랭킹</button>
       </div>
 
