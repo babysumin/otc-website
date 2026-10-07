@@ -150,7 +150,7 @@ export default function GamesUnofficialPage() {
   const [genSaving, setGenSaving] = useState(false)
   const [guests, setGuests] = useState<Guest[]>([])
   const [guestNameInput, setGuestNameInput] = useState('')
-  const [guestGroupInput, setGuestGroupInput] = useState<'A' | 'B'>('A')
+  const [guestGroupInput, setGuestGroupInput] = useState<'A' | 'B' | ''>('')
 
   useEffect(() => {
     fetchHistory()
@@ -177,9 +177,11 @@ export default function GamesUnofficialPage() {
 
   function addGuest() {
     const name = guestNameInput.trim()
-    if (!name) return
-    setGuests(prev => [...prev, { name, group: guestGroupInput, attend0: false, attend13: true }])
+    const group = guestGroupInput
+    if (!name || !group) return
+    setGuests(prev => [...prev, { name, group, attend0: false, attend13: true }])
     setGuestNameInput('')
+    setGuestGroupInput('')
   }
 
   function removeGuest(name: string) {
@@ -442,7 +444,7 @@ export default function GamesUnofficialPage() {
       {tab === 'create' && (isMember || isAdmin) && (
         <div className="games-setup">
           <div className="match-info-box">
-            <p className="match-info-title">비공식 대진 생성은 이렇게 이뤄져요 (공식 한울 AA와는 다른 방식)</p>
+            <p className="match-info-title">비공식 대진 생성은 이렇게 이뤄져요</p>
             <ul className="match-info-list">
               <li>모든 팀은 항상 <strong>A조 1명 + B조 1명</strong>으로 구성돼요 (실력 시드 없이 완전 랜덤).</li>
               <li>참석 인원이 많은 조가 더 많이 쉬어요 (코트 수 × 2명까지만 뛸 수 있어요).</li>
@@ -465,6 +467,23 @@ export default function GamesUnofficialPage() {
             <div className="field">
               <label>1~3경기 코트 수 (2~4)</label>
               <input type="number" min={2} max={4} value={genCourts13} onChange={e => setGenCourts13(Math.min(4, Math.max(2, Number(e.target.value) || 2)))} />
+            </div>
+            <div className="field">
+              <label>게스트 추가</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input
+                  value={guestNameInput}
+                  onChange={e => setGuestNameInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') addGuest() }}
+                  style={{ flex: 1 }}
+                />
+                <select value={guestGroupInput} onChange={e => setGuestGroupInput(e.target.value as 'A' | 'B' | '')}>
+                  <option value="">조</option>
+                  <option value="A">A조</option>
+                  <option value="B">B조</option>
+                </select>
+                <button className="btn" onClick={addGuest}>+ 추가</button>
+              </div>
             </div>
           </div>
 
@@ -506,27 +525,6 @@ export default function GamesUnofficialPage() {
               </tbody>
             </table>
           </div>
-
-          <p className="games-setup-label" style={{ marginTop: 16 }}>게스트 추가 (선택)</p>
-          <div className="create-options">
-            <div className="field">
-              <label>이름</label>
-              <input
-                value={guestNameInput}
-                onChange={e => setGuestNameInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') addGuest() }}
-                placeholder="예: 전하민"
-              />
-            </div>
-            <div className="field">
-              <label>조</label>
-              <select value={guestGroupInput} onChange={e => setGuestGroupInput(e.target.value as 'A' | 'B')}>
-                <option value="A">A조</option>
-                <option value="B">B조</option>
-              </select>
-            </div>
-          </div>
-          <button className="btn" onClick={addGuest}>+ 게스트 추가</button>
 
           {guests.length > 0 && (
             <div className="table-wrap" style={{ marginTop: 10 }}>
