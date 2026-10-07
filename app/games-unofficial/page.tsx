@@ -27,6 +27,72 @@ type ParsedMatch = {
   error?: string
 }
 
+type PlayerStat = {
+  name: string
+  games: number
+  wins: number
+  draws: number
+  losses: number
+  points: number
+  diff: number
+}
+
+const WIN_POINTS = 100
+const DRAW_POINTS = 50
+const LOSE_POINTS = 30
+
+function quarterLabel(dateStr: string): string {
+  const [y, m] = dateStr.split('-')
+  const yy = y.slice(2)
+  const q = Math.floor((Number(m) - 1) / 3) + 1
+  return `${yy}Q${q}`
+}
+
+function computeStats(matches: UMatch[]): PlayerStat[] {
+  const played = matches.filter(h => h.score1 != null && h.score2 != null)
+  const stats: Record<string, PlayerStat> = {}
+
+  function ensure(name: string) {
+    if (!stats[name]) stats[name] = { name, games: 0, wins: 0, draws: 0, losses: 0, points: 0, diff: 0 }
+  }
+
+  for (const h of played) {
+    const s1 = h.score1 as number, s2 = h.score2 as number
+    const result = s1 === s2 ? 'draw' : s1 > s2 ? 'team1' : 'team2'
+    ;[...h.team1, ...h.team2].forEach(ensure)
+
+    for (const p of h.team1) {
+      stats[p].games++
+      stats[p].diff += s1 - s2
+      if (result === 'draw') { stats[p].draws++; stats[p].points += DRAW_POINTS }
+      else if (result === 'team1') { stats[p].wins++; stats[p].points += WIN_POINTS }
+      else { stats[p].losses++; stats[p].points += LOSE_POINTS }
+    }
+    for (const p of h.team2) {
+      stats[p].games++
+      stats[p].diff += s2 - s1
+      if (result === 'draw') { stats[p].draws++; stats[p].points += DRAW_POINTS }
+      else if (result === 'team2') { stats[p].wins++; stats[p].points += WIN_POINTS }
+      else { stats[p].losses++; stats[p].points += LOSE_POINTS }
+    }
+  }
+
+  return Object.values(stats).sort((a, b) => b.points - a.points || b.diff - a.diff || b.games - a.games)
+}
+
+function computeEventCounts(matches: UMatch[]): Record<string, number> {
+  const dateSets: Record<string, Set<string>> = {}
+  for (const m of matches) {
+    for (const p of [...m.team1, ...m.team2]) {
+      if (!dateSets[p]) dateSets[p] = new Set()
+      dateSets[p].add(m.session_date)
+    }
+  }
+  const counts: Record<string, number> = {}
+  for (const p of Object.keys(dateSets)) counts[p] = dateSets[p].size
+  return counts
+}
+
 // Parses a line like "하민(G) 은영 4:3 석준 준형" into teams + score.
 // The score token (N:N) marks the boundary between team1 and team2;
 // everything before it is team1, everything after is team2.
@@ -50,6 +116,8 @@ export default function GamesUnofficialPage() {
   const { isMember, pwInput, setPwInput, pwErr, checkPassword } = useMemberAuth()
   const [history, setHistory] = useState<UMatch[]>([])
   const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState<'matches' | 'ranking'>('matches')
+  const [collapsedRankingQuarters, setCollapsedRankingQuarters] = useState<Set<string>>(new Set())
   const [addOpen, setAddOpen] = useState(false)
   const [sessionDate, setSessionDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [courtsPerRound, setCourtsPerRound] = useState(4)
@@ -132,6 +200,35 @@ export default function GamesUnofficialPage() {
     }))
   }, [history])
 
+  const matchesByQuarter = useMemo(() => {
+    const groups: Record<string, UMatch[]> = {}
+    for (const m of history) {
+      const q = quarterLabel(m.session_date)
+      if (!groups[q]) groups[q] = []
+      groups[q].push(m)
+    }
+    return groups
+  }, [history])
+
+  const rankingByQuarter = useMemo(() => {
+    return Object.entries(matchesByQuarter)
+      .map(([quarter, matches]) => ({
+        quarter,
+        stats: computeStats(matches),
+        eventCounts: computeEventCounts(matches),
+      }))
+      .sort((a, b) => b.quarter.localeCompare(a.quarter))
+  }, [matchesByQuarter])
+
+  function toggleRankingQuarterCollapse(quarter: string) {
+    setCollapsedRankingQuarters(prev => {
+      const next = new Set(prev)
+      if (next.has(quarter)) next.delete(quarter)
+      else next.add(quarter)
+      return next
+    })
+  }
+
   if (!isMember && !isAdmin) {
     return (
       <div className="wrap">
@@ -157,42 +254,94 @@ export default function GamesUnofficialPage() {
         월요일 모임 등 비공식 경기 기록이에요. 6점 내기 · 한 코트라도 먼저 6점을 내면 그 라운드가 끝나고 다음 라운드로 넘어가는 방식이라, 코트별 결과를 그대로 기록해요. 이름 뒤의 (G)는 게스트예요.
       </p>
 
-      {!loading && history.length === 0 && <div className="empty">아직 기록된 비공식 경기가 없어요.</div>}
+      <div className="subtabs">
+        <button className={`subtab ${tab === 'matches' ? 'active' : ''}`} onClick={() => setTab('matches')}>기록</button>
+        <button className={`subtab ${tab === 'ranking' ? 'active' : ''}`} onClick={() => setTab('ranking')}>랭킹</button>
+      </div>
 
-      {grouped.map(({ date, rounds }) => (
-        <div key={date} className="gallery-quarter-group">
-          <h3 className="gallery-quarter-title">{date}</h3>
-          {rounds.map(([roundNo, matches]) => (
-            <div key={roundNo} className="gallery-event-group">
-              <h4 className="gallery-event-title">{roundNo}경기</h4>
-              <div className="match-history">
-                {matches.map(m => (
-                  <div key={m.id} className="match-card">
-                    <div className="match-date">코트 {m.court_no}</div>
-                    <div className="match-teams">
-                      <span className="team-names">{m.team1.join(' · ')}</span>
-                      <span className="vs">vs</span>
-                      <span className="team-names">{m.team2.join(' · ')}</span>
-                    </div>
-                    {(isMember || isAdmin) ? (
-                      <div className="match-score-inputs">
-                        <input type="number" defaultValue={m.score1 ?? ''} onBlur={e => updateScore(m.id, e.target.value ? Number(e.target.value) : null, m.score2)} />
-                        <span>:</span>
-                        <input type="number" defaultValue={m.score2 ?? ''} onBlur={e => updateScore(m.id, m.score1, e.target.value ? Number(e.target.value) : null)} />
-                        <button className="icon-btn" onClick={() => deleteMatch(m.id)} title="이 경기 삭제">✕</button>
+      {tab === 'matches' && (
+        <>
+          {!loading && history.length === 0 && <div className="empty">아직 기록된 비공식 경기가 없어요.</div>}
+
+          {grouped.map(({ date, rounds }) => (
+            <div key={date} className="gallery-quarter-group">
+              <h3 className="gallery-quarter-title">{date}</h3>
+              {rounds.map(([roundNo, matches]) => (
+                <div key={roundNo} className="gallery-event-group">
+                  <h4 className="gallery-event-title">{roundNo}경기</h4>
+                  <div className="match-history">
+                    {matches.map(m => (
+                      <div key={m.id} className="match-card">
+                        <div className="match-date">코트 {m.court_no}</div>
+                        <div className="match-teams">
+                          <span className="team-names">{m.team1.join(' · ')}</span>
+                          <span className="vs">vs</span>
+                          <span className="team-names">{m.team2.join(' · ')}</span>
+                        </div>
+                        {(isMember || isAdmin) ? (
+                          <div className="match-score-inputs">
+                            <input type="number" defaultValue={m.score1 ?? ''} onBlur={e => updateScore(m.id, e.target.value ? Number(e.target.value) : null, m.score2)} />
+                            <span>:</span>
+                            <input type="number" defaultValue={m.score2 ?? ''} onBlur={e => updateScore(m.id, m.score1, e.target.value ? Number(e.target.value) : null)} />
+                            <button className="icon-btn" onClick={() => deleteMatch(m.id)} title="이 경기 삭제">✕</button>
+                          </div>
+                        ) : (
+                          <div className="match-score-display">
+                            {m.score1 != null && m.score2 != null ? `${m.score1} : ${m.score2}` : '결과 미입력'}
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <div className="match-score-display">
-                        {m.score1 != null && m.score2 != null ? `${m.score1} : ${m.score2}` : '결과 미입력'}
-                      </div>
-                    )}
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
           ))}
-        </div>
-      ))}
+        </>
+      )}
+
+      {tab === 'ranking' && (
+        <>
+          <p className="ranking-note">승리 +{WIN_POINTS}P / 무승부 +{DRAW_POINTS}P / 패배 +{LOSE_POINTS}P 기준으로 계산돼요. A조/B조 구분 없이 전체 랭킹이에요.</p>
+          {rankingByQuarter.length === 0 && <div className="empty">아직 결과가 입력된 경기가 없어요.</div>}
+          {rankingByQuarter.map(({ quarter, stats, eventCounts }) => {
+            const collapsed = collapsedRankingQuarters.has(quarter)
+            return (
+              <div key={quarter} className="quarter-session-group">
+                <button className="quarter-toggle" onClick={() => toggleRankingQuarterCollapse(quarter)}>
+                  <span className={`quarter-toggle-arrow ${collapsed ? 'collapsed' : ''}`}>▾</span>
+                  <span className="gallery-quarter-title" style={{ margin: 0, border: 'none', padding: 0 }}>{quarter}</span>
+                  <span className="quarter-toggle-count">{stats.length}명 참가</span>
+                </button>
+                {!collapsed && (
+                  <div className="table-wrap" style={{ marginTop: 8 }}>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>순위</th><th>이름</th><th>승점</th><th>승/무/패</th><th>승률/참가</th><th>득실</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {stats.map((s, i) => (
+                          <tr key={s.name}>
+                            <td className="rank-num">{i + 1}</td>
+                            <td className="name-cell">{s.name}</td>
+                            <td className="ledger-total">{s.points}P</td>
+                            <td>{s.wins} / {s.draws} / {s.losses}</td>
+                            <td>{s.games > 0 ? `${((s.wins / s.games) * 100).toFixed(0)}%` : '-'} / {eventCounts[s.name] || 0}회</td>
+                            <td>{s.diff > 0 ? `+${s.diff}` : s.diff}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {stats.length === 0 && <div className="empty">이 분기 데이터가 없어요.</div>}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </>
+      )}
 
       {addOpen && (
         <div className="modal-overlay show" onClick={e => { if (e.target === e.currentTarget && !saving) setAddOpen(false) }}>
