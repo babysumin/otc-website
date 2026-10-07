@@ -19,15 +19,6 @@ type UMatch = {
   score2: number | null
 }
 
-type ParsedMatch = {
-  team1: string[]
-  team2: string[]
-  score1: number | null
-  score2: number | null
-  raw: string
-  error?: string
-}
-
 type PlayerStat = {
   name: string
   games: number
@@ -106,24 +97,6 @@ const DEFAULT_GROUP: Record<string, 'A' | 'B'> = {
 
 type Guest = { name: string; group: 'A' | 'B'; attend0: boolean; attend13: boolean }
 
-// Parses a line like "하민(G) 은영 4:3 석준 준형" into teams + score.
-// The score token (N:N) marks the boundary between team1 and team2;
-// everything before it is team1, everything after is team2.
-function parseLine(line: string): ParsedMatch {
-  const tokens = line.trim().split(/\s+/).filter(Boolean)
-  const scoreIdx = tokens.findIndex(t => /^\d+:\d+$/.test(t))
-  if (scoreIdx === -1 || scoreIdx === 0 || scoreIdx === tokens.length - 1) {
-    return { team1: [], team2: [], score1: null, score2: null, raw: line, error: '형식을 읽을 수 없어요 (예: 이름1 이름2 4:3 이름3 이름4)' }
-  }
-  const team1 = tokens.slice(0, scoreIdx)
-  const team2 = tokens.slice(scoreIdx + 1)
-  const [s1, s2] = tokens[scoreIdx].split(':').map(Number)
-  if (team1.length === 0 || team2.length === 0) {
-    return { team1, team2, score1: null, score2: null, raw: line, error: '양 팀 선수를 모두 입력해주세요' }
-  }
-  return { team1, team2, score1: s1, score2: s2, raw: line }
-}
-
 export default function GamesUnofficialPage() {
   const { isAdmin } = useAuth()
   const { isMember, pwInput, setPwInput, pwErr, checkPassword } = useMemberAuth()
@@ -132,12 +105,6 @@ export default function GamesUnofficialPage() {
   const [tab, setTab] = useState<'matches' | 'ranking' | 'create'>('create')
   const [collapsedQuarters, setCollapsedQuarters] = useState<Set<string>>(new Set())
   const [collapsedRankingQuarters, setCollapsedRankingQuarters] = useState<Set<string>>(new Set())
-  const [addOpen, setAddOpen] = useState(false)
-  const [sessionDate, setSessionDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [courtsPerRound, setCourtsPerRound] = useState(4)
-  const [rawText, setRawText] = useState('')
-  const [saving, setSaving] = useState(false)
-
   // 생성 탭 상태
   const [members, setMembers] = useState<Member[]>([])
   const [genGroup, setGenGroup] = useState<Record<string, 'A' | 'B' | ''>>({})
@@ -151,6 +118,7 @@ export default function GamesUnofficialPage() {
   const [guests, setGuests] = useState<Guest[]>([])
   const [guestNameInput, setGuestNameInput] = useState('')
   const [guestGroupInput, setGuestGroupInput] = useState<'A' | 'B' | ''>('')
+  const [guestFormOpen, setGuestFormOpen] = useState(false)
 
   useEffect(() => {
     fetchHistory()
@@ -158,14 +126,23 @@ export default function GamesUnofficialPage() {
   }, [])
 
   async function fetchMembers() {
-    const { data } = await supabase.from('members').select('*').eq('status', 'member').order('name')
+    const [membersRes, groupsRes] = await Promise.all([
+      supabase.from('members').select('*').eq('status', 'member').order('name'),
+      supabase.from('unofficial_member_groups').select('*'),
+    ])
+    const data = membersRes.data
     if (data) {
       const list = data as Member[]
       setMembers(list)
-      // 아직 아무 그룹도 지정 안 한 회원에 한해, 엑셀 참석명단 기본값을 채워줌
+      const savedGroups: Record<string, 'A' | 'B'> = {}
+      ;(groupsRes.data || []).forEach((row: any) => { savedGroups[row.member_name] = row.group_label })
+      // 우선순위: 저장된 조 배정(DB) > 엑셀 참석명단 기본값 > 미지정
       setGenGroup(prev => {
         const next = { ...prev }
-        list.forEach(m => { if (!next[m.name] && DEFAULT_GROUP[m.name]) next[m.name] = DEFAULT_GROUP[m.name] })
+        list.forEach(m => {
+          if (savedGroups[m.name]) next[m.name] = savedGroups[m.name]
+          else if (!next[m.name] && DEFAULT_GROUP[m.name]) next[m.name] = DEFAULT_GROUP[m.name]
+        })
         return next
       })
     }
@@ -173,15 +150,21 @@ export default function GamesUnofficialPage() {
 
   function setGroup(name: string, g: 'A' | 'B' | '') {
     setGenGroup(prev => ({ ...prev, [name]: g }))
+    if (g) {
+      supabase.from('unofficial_member_groups').upsert({ member_name: name, group_label: g }).then()
+    } else {
+      supabase.from('unofficial_member_groups').delete().eq('member_name', name).then()
+    }
   }
 
-  function addGuest() {
+  function addGuest(): boolean {
     const name = guestNameInput.trim()
     const group = guestGroupInput
-    if (!name || !group) return
+    if (!name || !group) return false
     setGuests(prev => [...prev, { name, group, attend0: false, attend13: true }])
     setGuestNameInput('')
     setGuestGroupInput('')
+    return true
   }
 
   function removeGuest(name: string) {
@@ -256,30 +239,6 @@ export default function GamesUnofficialPage() {
     setLoading(false)
   }
 
-  const parsedLines = useMemo(() => {
-    return rawText.split('\n').map(l => l.trim()).filter(Boolean).map(parseLine)
-  }, [rawText])
-
-  const hasParseError = parsedLines.some(p => p.error)
-
-  async function saveParsed() {
-    if (parsedLines.length === 0 || hasParseError) return
-    setSaving(true)
-    const rows = parsedLines.map((p, i) => ({
-      session_date: sessionDate,
-      round_no: Math.floor(i / courtsPerRound) + 1,
-      court_no: (i % courtsPerRound) + 1,
-      team1: p.team1,
-      team2: p.team2,
-      score1: p.score1,
-      score2: p.score2,
-    }))
-    await supabase.from('unofficial_matches').insert(rows)
-    setSaving(false)
-    setAddOpen(false)
-    setRawText('')
-    fetchHistory()
-  }
 
   async function deleteMatch(id: string) {
     if (!confirm('이 경기 기록을 삭제할까요?')) return
@@ -374,7 +333,6 @@ export default function GamesUnofficialPage() {
 
       <div className="section-header">
         <h2 className="section-title">경기 (비공식)</h2>
-        {(isMember || isAdmin) && <button className="btn primary" onClick={() => setAddOpen(true)}>+ 기록 추가</button>}
       </div>
 
       <p className="ranking-note">
@@ -469,21 +427,27 @@ export default function GamesUnofficialPage() {
               <input type="number" min={2} max={4} value={genCourts13} onChange={e => setGenCourts13(Math.min(4, Math.max(2, Number(e.target.value) || 2)))} />
             </div>
             <div className="field">
-              <label>게스트 추가</label>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input
-                  value={guestNameInput}
-                  onChange={e => setGuestNameInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') addGuest() }}
-                  style={{ flex: 1 }}
-                />
-                <select value={guestGroupInput} onChange={e => setGuestGroupInput(e.target.value as 'A' | 'B' | '')}>
-                  <option value="">조</option>
-                  <option value="A">A조</option>
-                  <option value="B">B조</option>
-                </select>
-                <button className="btn" onClick={addGuest}>+ 추가</button>
-              </div>
+              <label>게스트</label>
+              {!guestFormOpen ? (
+                <button className="btn" onClick={() => setGuestFormOpen(true)}>+ 게스트 추가</button>
+              ) : (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    autoFocus
+                    value={guestNameInput}
+                    onChange={e => setGuestNameInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') addGuest() }}
+                    style={{ flex: 1 }}
+                  />
+                  <select value={guestGroupInput} onChange={e => setGuestGroupInput(e.target.value as 'A' | 'B' | '')}>
+                    <option value="">조</option>
+                    <option value="A">A조</option>
+                    <option value="B">B조</option>
+                  </select>
+                  <button className="btn" onClick={() => { if (addGuest()) setGuestFormOpen(false) }}>추가</button>
+                  <button className="btn" onClick={() => { setGuestFormOpen(false); setGuestNameInput(''); setGuestGroupInput('') }}>취소</button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -649,50 +613,6 @@ export default function GamesUnofficialPage() {
         </>
       )}
 
-      {addOpen && (
-        <div className="modal-overlay show" onClick={e => { if (e.target === e.currentTarget && !saving) setAddOpen(false) }}>
-          <div className="modal">
-            <h2>비공식 경기 기록 추가</h2>
-            <div className="field">
-              <label>날짜</label>
-              <input type="date" value={sessionDate} onChange={e => setSessionDate(e.target.value)} />
-            </div>
-            <div className="field">
-              <label>라운드당 코트 수</label>
-              <input type="number" min={1} value={courtsPerRound} onChange={e => setCourtsPerRound(Math.max(1, Number(e.target.value) || 1))} />
-            </div>
-            <div className="field">
-              <label>경기 결과 (한 줄에 하나씩, 예: 하민(G) 은영 4:3 석준 준형)</label>
-              <textarea
-                className="intro-textarea"
-                style={{ minHeight: 180, fontFamily: 'monospace', fontSize: 13 }}
-                value={rawText}
-                onChange={e => setRawText(e.target.value)}
-                placeholder={'하민(G) 은영 4:3 석준 준형\n수민 수진 4:1 재현 용진\n...'}
-              />
-            </div>
-            {parsedLines.length > 0 && (
-              <div className="field">
-                <label>미리보기 ({parsedLines.length}경기, {Math.ceil(parsedLines.length / courtsPerRound)}라운드)</label>
-                <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px' }}>
-                  {parsedLines.map((p, i) => (
-                    <div key={i} style={{ fontSize: 12.5, padding: '3px 0', color: p.error ? '#c2492c' : 'var(--text)' }}>
-                      {i % courtsPerRound === 0 && <strong style={{ display: 'block', marginTop: i === 0 ? 0 : 6 }}>{Math.floor(i / courtsPerRound) + 1}경기</strong>}
-                      {p.error ? `⚠ ${p.raw} — ${p.error}` : `코트${(i % courtsPerRound) + 1}  ${p.team1.join(' ')} ${p.score1}:${p.score2} ${p.team2.join(' ')}`}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div className="modal-actions">
-              <button className="btn" disabled={saving} onClick={() => setAddOpen(false)}>취소</button>
-              <button className="btn primary" disabled={saving || parsedLines.length === 0 || hasParseError} onClick={saveParsed}>
-                {saving ? '저장 중...' : '저장'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
