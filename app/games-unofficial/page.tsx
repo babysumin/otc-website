@@ -117,7 +117,7 @@ export default function GamesUnofficialPage() {
   const { isMember, pwInput, setPwInput, pwErr, checkPassword } = useMemberAuth()
   const [history, setHistory] = useState<UMatch[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'matches' | 'ranking' | 'create'>('matches')
+  const [tab, setTab] = useState<'matches' | 'ranking' | 'create'>('create')
   const [collapsedQuarters, setCollapsedQuarters] = useState<Set<string>>(new Set())
   const [collapsedRankingQuarters, setCollapsedRankingQuarters] = useState<Set<string>>(new Set())
   const [addOpen, setAddOpen] = useState(false)

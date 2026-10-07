@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, Suspense } from 'react'
+import { useEffect, useMemo, useRef, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { supabase, Member } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
@@ -451,7 +451,8 @@ function GamesPageInner() {
   const { isAdmin } = useAuth()
   const { isMember, pwInput, setPwInput, pwErr, checkPassword } = useMemberAuth()
   const searchParams = useSearchParams()
-  const [tab, setTab] = useState<'create' | 'sessions' | 'ranking'>('sessions')
+  const [tab, setTab] = useState<'create' | 'sessions' | 'ranking'>('create')
+  const score2Refs = useRef<Record<string, HTMLInputElement | null>>({})
   const [members, setMembers] = useState<Member[]>([])
   const [allMatches, setAllMatches] = useState<MatchRow[]>([])
   const [sessions, setSessions] = useState<SessionRow[]>([])
@@ -893,9 +894,9 @@ function GamesPageInner() {
       </div>
 
       <div className="subtabs">
-        {(isMember || isAdmin) && <button className={`subtab ${tab === 'create' ? 'active' : ''}`} onClick={() => setTab('create')}>대회 생성</button>}
-        <button className={`subtab ${tab === 'sessions' ? 'active' : ''}`} onClick={() => { setTab('sessions'); setSelectedPlayer(null) }}>대회 기록</button>
-        <button className={`subtab ${tab === 'ranking' ? 'active' : ''}`} onClick={() => { setTab('ranking'); setSelectedPlayer(null) }}>전체 랭킹</button>
+        {(isMember || isAdmin) && <button className={`subtab ${tab === 'create' ? 'active' : ''}`} onClick={() => setTab('create')}>경기 생성</button>}
+        <button className={`subtab ${tab === 'sessions' ? 'active' : ''}`} onClick={() => { setTab('sessions'); setSelectedPlayer(null) }}>경기 기록</button>
+        <button className={`subtab ${tab === 'ranking' ? 'active' : ''}`} onClick={() => { setTab('ranking'); setSelectedPlayer(null) }}>랭킹</button>
       </div>
 
       {tab === 'create' && (isMember || isAdmin) && (
@@ -1131,9 +1132,21 @@ function GamesPageInner() {
                       </div>
                       {(isMember || isAdmin) ? (
                         <div className="match-score-inputs">
-                          <input type="number" defaultValue={m.score1 ?? ''} onBlur={e => updateScore(m.id, e.target.value ? Number(e.target.value) : null, m.score2)} />
+                          <input
+                            type="number"
+                            defaultValue={m.score1 ?? ''}
+                            onFocus={e => e.target.select()}
+                            onChange={e => { if (e.target.value.length === 1) score2Refs.current[m.id]?.focus() }}
+                            onBlur={e => updateScore(m.id, e.target.value ? Number(e.target.value) : null, m.score2)}
+                          />
                           <span>:</span>
-                          <input type="number" defaultValue={m.score2 ?? ''} onBlur={e => updateScore(m.id, m.score1, e.target.value ? Number(e.target.value) : null)} />
+                          <input
+                            type="number"
+                            ref={el => { score2Refs.current[m.id] = el }}
+                            defaultValue={m.score2 ?? ''}
+                            onFocus={e => e.target.select()}
+                            onBlur={e => updateScore(m.id, m.score1, e.target.value ? Number(e.target.value) : null)}
+                          />
                           <button className="icon-btn" onClick={() => deleteMatch(m.id)} title="이 매치 삭제">✕</button>
                         </div>
                       ) : (
