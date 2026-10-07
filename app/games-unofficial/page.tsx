@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
+import { useMemberAuth } from '@/lib/useMemberAuth'
 import TopNav from '@/components/TopNav'
+import MemberGate from '@/components/MemberGate'
 
 type UMatch = {
   id: string
@@ -45,6 +47,7 @@ function parseLine(line: string): ParsedMatch {
 
 export default function GamesUnofficialPage() {
   const { isAdmin } = useAuth()
+  const { isMember, pwInput, setPwInput, pwErr, checkPassword } = useMemberAuth()
   const [history, setHistory] = useState<UMatch[]>([])
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
@@ -129,13 +132,25 @@ export default function GamesUnofficialPage() {
     }))
   }, [history])
 
+  if (!isMember && !isAdmin) {
+    return (
+      <div className="wrap">
+        <TopNav />
+        <div className="section-header">
+          <h2 className="section-title">경기 (비공식)</h2>
+        </div>
+        <MemberGate title="경기 (비공식)" pwInput={pwInput} setPwInput={setPwInput} pwErr={pwErr} checkPassword={checkPassword} />
+      </div>
+    )
+  }
+
   return (
     <div className="wrap">
       <TopNav />
 
       <div className="section-header">
         <h2 className="section-title">경기 (비공식)</h2>
-        {isAdmin && <button className="btn primary" onClick={() => setAddOpen(true)}>+ 기록 추가</button>}
+        {(isMember || isAdmin) && <button className="btn primary" onClick={() => setAddOpen(true)}>+ 기록 추가</button>}
       </div>
 
       <p className="ranking-note">
@@ -159,12 +174,12 @@ export default function GamesUnofficialPage() {
                       <span className="vs">vs</span>
                       <span className="team-names">{m.team2.join(' · ')}</span>
                     </div>
-                    {isAdmin ? (
+                    {(isMember || isAdmin) ? (
                       <div className="match-score-inputs">
                         <input type="number" defaultValue={m.score1 ?? ''} onBlur={e => updateScore(m.id, e.target.value ? Number(e.target.value) : null, m.score2)} />
                         <span>:</span>
                         <input type="number" defaultValue={m.score2 ?? ''} onBlur={e => updateScore(m.id, m.score1, e.target.value ? Number(e.target.value) : null)} />
-                        <button className="icon-btn" onClick={() => deleteMatch(m.id)}>⋯</button>
+                        <button className="icon-btn" onClick={() => deleteMatch(m.id)} title="이 경기 삭제">✕</button>
                       </div>
                     ) : (
                       <div className="match-score-display">
