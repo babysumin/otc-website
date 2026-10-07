@@ -428,26 +428,7 @@ export default function GamesUnofficialPage() {
             </div>
             <div className="field">
               <label>게스트</label>
-              {!guestFormOpen ? (
-                <button className="btn" onClick={() => setGuestFormOpen(true)}>+ 게스트 추가</button>
-              ) : (
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input
-                    autoFocus
-                    value={guestNameInput}
-                    onChange={e => setGuestNameInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') addGuest() }}
-                    style={{ flex: 1 }}
-                  />
-                  <select value={guestGroupInput} onChange={e => setGuestGroupInput(e.target.value as 'A' | 'B' | '')}>
-                    <option value="">조</option>
-                    <option value="A">A조</option>
-                    <option value="B">B조</option>
-                  </select>
-                  <button className="btn" onClick={() => { if (addGuest()) setGuestFormOpen(false) }}>추가</button>
-                  <button className="btn" onClick={() => { setGuestFormOpen(false); setGuestNameInput(''); setGuestGroupInput('') }}>취소</button>
-                </div>
-              )}
+              <button className="btn" onClick={() => setGuestFormOpen(true)}>+ 게스트 추가</button>
             </div>
           </div>
 
@@ -611,6 +592,35 @@ export default function GamesUnofficialPage() {
             )
           })}
         </>
+      )}
+
+      {guestFormOpen && (
+        <div className="modal-overlay show" onClick={e => { if (e.target === e.currentTarget) { setGuestFormOpen(false); setGuestNameInput(''); setGuestGroupInput('') } }}>
+          <div className="modal">
+            <h2>게스트 추가</h2>
+            <div className="field">
+              <label>이름</label>
+              <input
+                autoFocus
+                value={guestNameInput}
+                onChange={e => setGuestNameInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { if (addGuest()) setGuestFormOpen(false) } }}
+              />
+            </div>
+            <div className="field">
+              <label>조</label>
+              <select value={guestGroupInput} onChange={e => setGuestGroupInput(e.target.value as 'A' | 'B' | '')}>
+                <option value="">조 선택</option>
+                <option value="A">A조</option>
+                <option value="B">B조</option>
+              </select>
+            </div>
+            <div className="modal-actions">
+              <button className="btn" onClick={() => { setGuestFormOpen(false); setGuestNameInput(''); setGuestGroupInput('') }}>취소</button>
+              <button className="btn primary" onClick={() => { if (addGuest()) setGuestFormOpen(false) }}>추가</button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

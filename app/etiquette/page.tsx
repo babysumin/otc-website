@@ -61,6 +61,7 @@ export default function EtiquettePage() {
         <>
           <textarea
             className="policy-textarea"
+            style={{ minHeight: '60vh' }}
             value={draft}
             onChange={e => setDraft(e.target.value)}
           />
