@@ -94,6 +94,18 @@ function computeEventCounts(matches: UMatch[]): Record<string, number> {
   return counts
 }
 
+// 2026-10-05 대진표 엑셀(참석명단 탭)에 적혀있던 A/B조 기본값. 새로 가입한 회원은 여기 없어서 기본값 없이 "-"로 떠요.
+const DEFAULT_GROUP: Record<string, 'A' | 'B'> = {
+  '강수민': 'A', '김근휘': 'A', '김완태': 'A', '양길석': 'A', '이재현': 'A', '이영묵': 'A', '이성욱': 'A',
+  '최현종': 'A', '이석호 (Andrew)': 'A', '김학균': 'A', '신인재': 'A', '장미현': 'A', '안효철': 'A',
+  '이재욱': 'A', '이용범': 'A', '박상률': 'A', '유동규 (David)': 'A',
+  '박효원': 'B', '조광수': 'B', '강민준': 'B', '박수진': 'B', '정진관': 'B', '권용진': 'B', '김영석': 'B',
+  '고은아': 'B', '전예진': 'B', '성경아': 'B', '신은영': 'B', '이종민': 'B', '안준형': 'B', '박정은': 'B',
+  '이지윤': 'B', '조진오': 'B', '이재용': 'B', '김예원': 'B', '신수민': 'B', '김민기': 'B', '김재인': 'B',
+}
+
+type Guest = { name: string; group: 'A' | 'B'; attend0: boolean; attend13: boolean }
+
 // Parses a line like "하민(G) 은영 4:3 석준 준형" into teams + score.
 // The score token (N:N) marks the boundary between team1 and team2;
 // everything before it is team1, everything after is team2.
@@ -136,6 +148,9 @@ export default function GamesUnofficialPage() {
   const [genDate, setGenDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [genPreview, setGenPreview] = useState<{ zero: UnofficialMatch[]; rounds: UnofficialMatch[][] } | null>(null)
   const [genSaving, setGenSaving] = useState(false)
+  const [guests, setGuests] = useState<Guest[]>([])
+  const [guestNameInput, setGuestNameInput] = useState('')
+  const [guestGroupInput, setGuestGroupInput] = useState<'A' | 'B'>('A')
 
   useEffect(() => {
     fetchHistory()
@@ -144,22 +159,48 @@ export default function GamesUnofficialPage() {
 
   async function fetchMembers() {
     const { data } = await supabase.from('members').select('*').eq('status', 'member').order('name')
-    if (data) setMembers(data as Member[])
+    if (data) {
+      const list = data as Member[]
+      setMembers(list)
+      // 아직 아무 그룹도 지정 안 한 회원에 한해, 엑셀 참석명단 기본값을 채워줌
+      setGenGroup(prev => {
+        const next = { ...prev }
+        list.forEach(m => { if (!next[m.name] && DEFAULT_GROUP[m.name]) next[m.name] = DEFAULT_GROUP[m.name] })
+        return next
+      })
+    }
   }
 
   function setGroup(name: string, g: 'A' | 'B' | '') {
     setGenGroup(prev => ({ ...prev, [name]: g }))
   }
 
-  function attendingFor(attendMap: Record<string, boolean>, groupKey: 'A' | 'B') {
-    return members.filter(m => genGroup[m.name] === groupKey && attendMap[m.name]).map(m => m.name)
+  function addGuest() {
+    const name = guestNameInput.trim()
+    if (!name) return
+    setGuests(prev => [...prev, { name, group: guestGroupInput, attend0: false, attend13: true }])
+    setGuestNameInput('')
+  }
+
+  function removeGuest(name: string) {
+    setGuests(prev => prev.filter(g => g.name !== name))
+  }
+
+  function updateGuest(name: string, patch: Partial<Guest>) {
+    setGuests(prev => prev.map(g => (g.name === name ? { ...g, ...patch } : g)))
+  }
+
+  function attendingFor(attendMap: Record<string, boolean>, groupKey: 'A' | 'B', guestAttendKey: 'attend0' | 'attend13') {
+    const memberNames = members.filter(m => genGroup[m.name] === groupKey && attendMap[m.name]).map(m => m.name)
+    const guestNames = guests.filter(g => g.group === groupKey && g[guestAttendKey]).map(g => `${g.name}(G)`)
+    return [...memberNames, ...guestNames]
   }
 
   function runGenerate() {
-    const groupA0 = attendingFor(genAttend0, 'A')
-    const groupB0 = attendingFor(genAttend0, 'B')
-    const groupA13 = attendingFor(genAttend13, 'A')
-    const groupB13 = attendingFor(genAttend13, 'B')
+    const groupA0 = attendingFor(genAttend0, 'A', 'attend0')
+    const groupB0 = attendingFor(genAttend0, 'B', 'attend0')
+    const groupA13 = attendingFor(genAttend13, 'A', 'attend13')
+    const groupB13 = attendingFor(genAttend13, 'B', 'attend13')
 
     const { matches: zero } = (groupA0.length >= 2 && groupB0.length >= 2)
       ? generateZeroRound(groupA0, groupB0, genCourts0)
@@ -465,6 +506,59 @@ export default function GamesUnofficialPage() {
               </tbody>
             </table>
           </div>
+
+          <p className="games-setup-label" style={{ marginTop: 16 }}>게스트 추가 (선택)</p>
+          <div className="create-options">
+            <div className="field">
+              <label>이름</label>
+              <input
+                value={guestNameInput}
+                onChange={e => setGuestNameInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') addGuest() }}
+                placeholder="예: 전하민"
+              />
+            </div>
+            <div className="field">
+              <label>조</label>
+              <select value={guestGroupInput} onChange={e => setGuestGroupInput(e.target.value as 'A' | 'B')}>
+                <option value="A">A조</option>
+                <option value="B">B조</option>
+              </select>
+            </div>
+          </div>
+          <button className="btn" onClick={addGuest}>+ 게스트 추가</button>
+
+          {guests.length > 0 && (
+            <div className="table-wrap" style={{ marginTop: 10 }}>
+              <table>
+                <thead>
+                  <tr><th>이름</th><th>조</th><th>0경기 참석</th><th>1~3경기 참석</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {guests.map(g => (
+                    <tr key={g.name}>
+                      <td className="name-cell">{g.name}(G)</td>
+                      <td>
+                        <select value={g.group} onChange={e => updateGuest(g.name, { group: e.target.value as 'A' | 'B' })}>
+                          <option value="A">A조</option>
+                          <option value="B">B조</option>
+                        </select>
+                      </td>
+                      <td>
+                        <input type="checkbox" checked={g.attend0} onChange={e => updateGuest(g.name, { attend0: e.target.checked })} />
+                      </td>
+                      <td>
+                        <input type="checkbox" checked={g.attend13} onChange={e => updateGuest(g.name, { attend13: e.target.checked })} />
+                      </td>
+                      <td>
+                        <button className="icon-btn" onClick={() => removeGuest(g.name)} title="게스트 삭제">✕</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           <button className="btn primary" style={{ marginTop: 12 }} onClick={runGenerate}>대진표 생성</button>
 
