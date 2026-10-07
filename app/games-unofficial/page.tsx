@@ -117,6 +117,7 @@ export default function GamesUnofficialPage() {
   const [history, setHistory] = useState<UMatch[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'matches' | 'ranking'>('matches')
+  const [collapsedQuarters, setCollapsedQuarters] = useState<Set<string>>(new Set())
   const [collapsedRankingQuarters, setCollapsedRankingQuarters] = useState<Set<string>>(new Set())
   const [addOpen, setAddOpen] = useState(false)
   const [sessionDate, setSessionDate] = useState(() => new Date().toISOString().slice(0, 10))
@@ -200,6 +201,27 @@ export default function GamesUnofficialPage() {
     }))
   }, [history])
 
+  const groupedByQuarter = useMemo(() => {
+    const byQuarter = new Map<string, typeof grouped>()
+    for (const g of grouped) {
+      const q = quarterLabel(g.date)
+      if (!byQuarter.has(q)) byQuarter.set(q, [])
+      byQuarter.get(q)!.push(g)
+    }
+    return Array.from(byQuarter.entries())
+      .map(([quarter, dates]) => ({ quarter, dates: dates.sort((a, b) => b.date.localeCompare(a.date)) }))
+      .sort((a, b) => b.quarter.localeCompare(a.quarter))
+  }, [grouped])
+
+  function toggleQuarterCollapse(quarter: string) {
+    setCollapsedQuarters(prev => {
+      const next = new Set(prev)
+      if (next.has(quarter)) next.delete(quarter)
+      else next.add(quarter)
+      return next
+    })
+  }
+
   const matchesByQuarter = useMemo(() => {
     const groups: Record<string, UMatch[]> = {}
     for (const m of history) {
@@ -263,40 +285,53 @@ export default function GamesUnofficialPage() {
         <>
           {!loading && history.length === 0 && <div className="empty">아직 기록된 비공식 경기가 없어요.</div>}
 
-          {grouped.map(({ date, rounds }) => (
-            <div key={date} className="gallery-quarter-group">
-              <h3 className="gallery-quarter-title">{date}</h3>
-              {rounds.map(([roundNo, matches]) => (
-                <div key={roundNo} className="gallery-event-group">
-                  <h4 className="gallery-event-title">{roundNo}경기</h4>
-                  <div className="match-history">
-                    {matches.map(m => (
-                      <div key={m.id} className="match-card">
-                        <div className="match-date">코트 {m.court_no}</div>
-                        <div className="match-teams">
-                          <span className="team-names">{m.team1.join(' · ')}</span>
-                          <span className="vs">vs</span>
-                          <span className="team-names">{m.team2.join(' · ')}</span>
+          {groupedByQuarter.map(({ quarter, dates }) => {
+            const collapsed = collapsedQuarters.has(quarter)
+            const totalCount = dates.reduce((sum, d) => sum + d.rounds.reduce((s, [, ms]) => s + ms.length, 0), 0)
+            return (
+              <div key={quarter} className="quarter-session-group">
+                <button className="quarter-toggle" onClick={() => toggleQuarterCollapse(quarter)}>
+                  <span className={`quarter-toggle-arrow ${collapsed ? 'collapsed' : ''}`}>▾</span>
+                  <span className="gallery-quarter-title" style={{ margin: 0, border: 'none', padding: 0 }}>{quarter}</span>
+                  <span className="quarter-toggle-count">{totalCount}경기</span>
+                </button>
+                {!collapsed && dates.map(({ date, rounds }) => (
+                  <div key={date} className="gallery-quarter-group">
+                    <h3 className="gallery-quarter-title">{date}</h3>
+                    {rounds.map(([roundNo, matches]) => (
+                      <div key={roundNo} className="gallery-event-group">
+                        <h4 className="gallery-event-title">{roundNo}경기</h4>
+                        <div className="match-history">
+                          {matches.map(m => (
+                            <div key={m.id} className="match-card">
+                              <div className="match-date">코트 {m.court_no}</div>
+                              <div className="match-teams">
+                                <span className="team-names">{m.team1.join(' · ')}</span>
+                                <span className="vs">vs</span>
+                                <span className="team-names">{m.team2.join(' · ')}</span>
+                              </div>
+                              {(isMember || isAdmin) ? (
+                                <div className="match-score-inputs">
+                                  <input type="number" defaultValue={m.score1 ?? ''} onBlur={e => updateScore(m.id, e.target.value ? Number(e.target.value) : null, m.score2)} />
+                                  <span>:</span>
+                                  <input type="number" defaultValue={m.score2 ?? ''} onBlur={e => updateScore(m.id, m.score1, e.target.value ? Number(e.target.value) : null)} />
+                                  <button className="icon-btn" onClick={() => deleteMatch(m.id)} title="이 경기 삭제">✕</button>
+                                </div>
+                              ) : (
+                                <div className="match-score-display">
+                                  {m.score1 != null && m.score2 != null ? `${m.score1} : ${m.score2}` : '결과 미입력'}
+                                </div>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                        {(isMember || isAdmin) ? (
-                          <div className="match-score-inputs">
-                            <input type="number" defaultValue={m.score1 ?? ''} onBlur={e => updateScore(m.id, e.target.value ? Number(e.target.value) : null, m.score2)} />
-                            <span>:</span>
-                            <input type="number" defaultValue={m.score2 ?? ''} onBlur={e => updateScore(m.id, m.score1, e.target.value ? Number(e.target.value) : null)} />
-                            <button className="icon-btn" onClick={() => deleteMatch(m.id)} title="이 경기 삭제">✕</button>
-                          </div>
-                        ) : (
-                          <div className="match-score-display">
-                            {m.score1 != null && m.score2 != null ? `${m.score1} : ${m.score2}` : '결과 미입력'}
-                          </div>
-                        )}
                       </div>
                     ))}
                   </div>
-                </div>
-              ))}
-            </div>
-          ))}
+                ))}
+              </div>
+            )
+          })}
         </>
       )}
 
