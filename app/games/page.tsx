@@ -784,6 +784,21 @@ function GamesPageInner() {
   const [collapsedRankingQuarters, setCollapsedRankingQuarters] = useState<Set<string>>(new Set())
   // 분기마다 독립적으로 전체/A그룹/B그룹 필터를 기억
 
+  // 기본값: 현재 분기만 펼치고 나머지 분기는 접어둠 (현재 분기 데이터가 없으면 가장 최근 분기를 펼침). 데이터가 처음 로드될 때 한 번만 적용
+  const quarterDefaultApplied = useRef(false)
+  useEffect(() => {
+    if (quarterDefaultApplied.current) return
+    const quarters = Array.from(new Set(sessionsByQuarter.map(q => q.quarter)))
+    if (quarters.length === 0) return
+    quarterDefaultApplied.current = true
+    const now = new Date()
+    const cur = quarterLabel(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`)
+    const open = quarters.includes(cur) ? cur : [...quarters].sort().reverse()[0]
+    const collapsedSet = new Set(quarters.filter(q => q !== open))
+    setCollapsedQuarters(collapsedSet)
+    setCollapsedRankingQuarters(new Set(collapsedSet))
+  }, [sessionsByQuarter])
+
   function toggleQuarterCollapse(quarter: string) {
     setCollapsedQuarters(prev => {
       const next = new Set(prev)
