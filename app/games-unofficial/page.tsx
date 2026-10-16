@@ -260,8 +260,9 @@ export default function GamesUnofficialPage() {
     fetchHistory()
   }
 
-  async function updateScore(id: string, score1: number | null, score2: number | null) {
-    await supabase.from('unofficial_matches').update({ score1, score2 }).eq('id', id)
+  // 바뀐 칸 하나만 저장. (예전엔 두 칸을 같이 덮어써서, 아직 갱신 안 된 옛 값으로 반대쪽 점수가 지워지는 문제가 있었음)
+  async function updateScoreField(id: string, field: 'score1' | 'score2', value: number | null) {
+    await supabase.from('unofficial_matches').update({ [field]: value }).eq('id', id)
     fetchHistory()
   }
 
@@ -405,9 +406,9 @@ export default function GamesUnofficialPage() {
                               </div>
                               {(isMember || isAdmin) ? (
                                 <div className="match-score-inputs">
-                                  <input type="number" defaultValue={m.score1 ?? ''} onBlur={e => updateScore(m.id, e.target.value ? Number(e.target.value) : null, m.score2)} />
+                                  <input type="number" defaultValue={m.score1 ?? ''} onBlur={e => updateScoreField(m.id, 'score1', e.target.value ? Number(e.target.value) : null)} />
                                   <span>:</span>
-                                  <input type="number" defaultValue={m.score2 ?? ''} onBlur={e => updateScore(m.id, m.score1, e.target.value ? Number(e.target.value) : null)} />
+                                  <input type="number" defaultValue={m.score2 ?? ''} onBlur={e => updateScoreField(m.id, 'score2', e.target.value ? Number(e.target.value) : null)} />
                                   <button className="icon-btn" onClick={() => deleteMatch(m.id)} title="이 경기 삭제">✕</button>
                                 </div>
                               ) : (

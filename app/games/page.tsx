@@ -677,8 +677,9 @@ function GamesPageInner() {
     setTab('sessions')
   }
 
-  async function updateScore(id: string, score1: number | null, score2: number | null) {
-    await supabase.from('matches').update({ score1, score2 }).eq('id', id)
+  // 바뀐 칸 하나만 저장. (예전엔 두 칸을 같이 덮어써서, 아직 갱신 안 된 옛 값으로 반대쪽 점수가 지워지는 문제가 있었음)
+  async function updateScoreField(id: string, field: 'score1' | 'score2', value: number | null) {
+    await supabase.from('matches').update({ [field]: value }).eq('id', id)
     fetchAll()
   }
 
@@ -1166,7 +1167,7 @@ function GamesPageInner() {
                             defaultValue={m.score1 ?? ''}
                             onFocus={e => e.target.select()}
                             onChange={e => { if (e.target.value.length === 1) score2Refs.current[m.id]?.focus() }}
-                            onBlur={e => updateScore(m.id, e.target.value ? Number(e.target.value) : null, m.score2)}
+                            onBlur={e => updateScoreField(m.id, 'score1', e.target.value ? Number(e.target.value) : null)}
                           />
                           <span>:</span>
                           <input
@@ -1174,7 +1175,7 @@ function GamesPageInner() {
                             ref={el => { score2Refs.current[m.id] = el }}
                             defaultValue={m.score2 ?? ''}
                             onFocus={e => e.target.select()}
-                            onBlur={e => updateScore(m.id, m.score1, e.target.value ? Number(e.target.value) : null)}
+                            onBlur={e => updateScoreField(m.id, 'score2', e.target.value ? Number(e.target.value) : null)}
                           />
                           <button className="icon-btn" onClick={() => deleteMatch(m.id)} title="이 매치 삭제">✕</button>
                         </div>
