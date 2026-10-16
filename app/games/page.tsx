@@ -477,6 +477,20 @@ function GamesPageInner() {
   const [finalizeMsg, setFinalizeMsg] = useState<string | null>(null)
   const [seedPreview, setSeedPreview] = useState<{ seeded: string[]; genderMap: Record<string, 'M' | 'F' | null>; protectedCount: number; protectedSeats: number[] } | null>(null)
 
+  // 새로고침해도 보던 서브탭 유지: 주소의 ?tab= 값으로 복원. 메뉴에서 처음 들어올 땐 ?tab=이 없어서 기본(경기 생성)으로 열림
+  const [tabReady, setTabReady] = useState(false)
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t === 'create' || t === 'sessions' || t === 'ranking') setTab(t)
+    setTabReady(true)
+  }, [])
+  useEffect(() => {
+    if (!tabReady) return
+    const url = new URL(window.location.href)
+    url.searchParams.set('tab', tab)
+    window.history.replaceState(null, '', url.toString())
+  }, [tab, tabReady])
+
   useEffect(() => {
     fetchMembers()
     fetchAll()
